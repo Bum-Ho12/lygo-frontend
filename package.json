@@ -4,13 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/copy-standalone-assets.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "api:generate": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/api/schema.ts"
+    "api:generate": "openapi-typescript http://localhost:8000/openapi.json -o src/lib/api/schema.ts",
+    "start:standalone": "node .next/standalone/server.js"
   },
   "dependencies": {
     "next": "^15.0.0",
