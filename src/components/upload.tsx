@@ -35,9 +35,9 @@ export function UploadDropzone({
       if (matterId) form.set("matter_id", matterId);
       return apiForm<DocumentRow>(uploadPath, form);
     },
-    onSuccess: async (document) => {
+    onSuccess: (document) => {
       setMessage(document.duplicate ? "That file is already in this firm." : "Uploaded. Lygo is reading it.");
-      await queryClient.invalidateQueries({ queryKey: ["firm", firmId] });
+      void queryClient.invalidateQueries({ queryKey: ["firm", firmId] }); // lists refresh in the background; the dropzone is free again
       onUploaded?.(document);
     },
     onError: (error) => setMessage(errorText(error)),

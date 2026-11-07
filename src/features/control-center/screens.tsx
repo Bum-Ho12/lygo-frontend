@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/browser";
 import { apiPaths } from "@/lib/api/paths";
@@ -400,6 +400,10 @@ export function StorageScreen() {
   const { firmId } = useFirmId();
   const queryClient = useQueryClient();
   const destinations = useDestinations(firmId, allowed);
+  const rows = destinations.data ?? [];
+  const active = rows.find((destination) => destination.is_primary) ?? null;
+  const [showOwn, setShowOwn] = useState(false);
+  const [confirmLygo, setConfirmLygo] = useState(false);
   const [form, setForm] = useState({
     name: "",
     region_country: "KE",
@@ -424,7 +428,7 @@ export function StorageScreen() {
         },
       }),
     onSuccess: () => {
-      setMessage("Storage destination saved. Test it before you make it primary.");
+      setMessage("Bucket saved. Test the connection, then choose “Use this bucket”.");
       setForm({ ...form, access_key: "", secret_key: "", name: "", bucket: "" });
       refresh();
     },
@@ -436,8 +440,12 @@ export function StorageScreen() {
     onError: (error) => setMessage(errorText(error)),
   });
   const primary = useMutation({
-    mutationFn: (id: string) => api(apiPaths.storagePrimary(firmId), { method: "PUT", body: { destination_id: id } }),
-    onSuccess: () => refresh(),
+    mutationFn: (id: string | null) => api(apiPaths.storagePrimary(firmId), { method: "PUT", body: { destination_id: id } }),
+    onSuccess: async (_, id) => {
+      await refresh(); // show the confirmation only once the cards reflect the change
+      setConfirmLygo(false);
+      setMessage(id ? "New uploads now go to your bucket." : "New uploads now go to Lygo storage.");
+    },
     onError: (error) => setMessage(errorText(error)),
   });
   const remove = useMutation({
@@ -450,66 +458,157 @@ export function StorageScreen() {
     return <EmptyState title="You don't have access" body="Only the firm owner can change where files are stored." />;
   }
 
+  const ownOpen = showOwn || rows.length > 0;
   return (
-      <div className="space-y-6">
-        <PageHeader title="Storage" lede="Documents are stored in a bucket the firm controls. A bucket outside Kenya needs a transfer basis." />
-        <Card>
-          <form
-            className="grid gap-3 md:grid-cols-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              create.mutate();
-            }}
+    <div className="space-y-6">
+      <PageHeader
+        title="Storage"
+        lede="Choose where this firm's documents are kept. You can change this at any time; documents already uploaded stay where they are."
+      />
+      <QueryState isLoading={destinations.isLoading} error={destinations.error}>
+        <div className="grid gap-4 md:grid-cols-2" role="radiogroup" aria-label="Where documents are stored">
+          <StorageOption
+            title="Lygo storage"
+            badge={active ? null : "In use"}
+            body="Encrypted and managed by Lygo. Nothing to set up: you can upload documents straight away."
           >
-            <Field label="Name">
-              <TextInput value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
-            </Field>
-            <Field label="Country of the bucket" hint="Two letters, for example KE.">
-              <TextInput value={form.region_country} maxLength={2} onChange={(event) => setForm({ ...form, region_country: event.target.value })} required />
-            </Field>
-            <Field label="Transfer basis" hint="Required when the bucket is outside Kenya.">
-              <TextInput value={form.transfer_basis} onChange={(event) => setForm({ ...form, transfer_basis: event.target.value })} />
-            </Field>
-            <Field label="Bucket">
-              <TextInput value={form.bucket} onChange={(event) => setForm({ ...form, bucket: event.target.value })} required />
-            </Field>
-            <Field label="Endpoint" hint="Leave blank for the default cloud endpoint.">
-              <TextInput value={form.endpoint_url} onChange={(event) => setForm({ ...form, endpoint_url: event.target.value })} />
-            </Field>
-            <Field label="Region code">
-              <TextInput value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} />
-            </Field>
-            <Field label="Folder prefix">
-              <TextInput value={form.prefix} onChange={(event) => setForm({ ...form, prefix: event.target.value })} />
-            </Field>
-            <Field label="Access key">
-              <TextInput value={form.access_key} onChange={(event) => setForm({ ...form, access_key: event.target.value })} autoComplete="off" required />
-            </Field>
-            <Field label="Secret key">
-              <TextInput type="password" value={form.secret_key} onChange={(event) => setForm({ ...form, secret_key: event.target.value })} autoComplete="new-password" required />
-            </Field>
-            <div className="md:col-span-2">
-              <Button type="submit" disabled={create.isPending}>
-                Save destination
+            {active ? (
+              confirmLygo ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm">New uploads will go to Lygo storage.</span>
+                  <Button type="button" onClick={() => primary.mutate(null)} disabled={primary.isPending}>
+                    Switch
+                  </Button>
+                  <Button type="button" variant="quiet" onClick={() => setConfirmLygo(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button type="button" variant="quiet" onClick={() => setConfirmLygo(true)}>
+                  Use Lygo storage
+                </Button>
+              )
+            ) : null}
+          </StorageOption>
+          <StorageOption
+            title="Your own storage"
+            badge={active ? "In use" : null}
+            body="A bucket your firm controls (AWS S3, MinIO, Wasabi or any S3-compatible service). Files never go anywhere else: if it can't be reached, uploads pause until it's back or you switch to Lygo storage."
+          >
+            {active ? (
+              <p className="text-sm">
+                Using <span className="font-semibold">{active.name}</span> ({active.region_country})
+              </p>
+            ) : ownOpen ? null : (
+              <Button type="button" variant="quiet" onClick={() => setShowOwn(true)}>
+                Set up your own bucket
               </Button>
-            </div>
-          </form>
-          {message ? <p className="mt-3 text-sm">{message}</p> : null}
-        </Card>
-        <QueryState isLoading={destinations.isLoading} error={destinations.error} empty={{ when: (destinations.data ?? []).length === 0, title: "No storage yet", body: "Add a bucket before uploading documents." }}>
-          <ul className="space-y-3">
-            {(destinations.data ?? []).map((destination) => (
-              <DestinationCard
-                key={destination.id}
-                destination={destination}
-                onTest={() => test.mutate(destination.id)}
-                onPrimary={() => primary.mutate(destination.id)}
-                onRemove={() => remove.mutate(destination.id)}
-              />
-            ))}
-          </ul>
-        </QueryState>
+            )}
+          </StorageOption>
+        </div>
+      </QueryState>
+      {message ? (
+        <p role="status" className="text-sm">
+          {message}
+        </p>
+      ) : null}
+
+      {ownOpen ? (
+        <section className="space-y-4">
+          <div>
+            <h2 className="font-display text-2xl">Your buckets</h2>
+            <p className="text-sm text-ink-soft">Add a bucket, test the connection, then choose “Use this bucket”.</p>
+          </div>
+          {rows.length > 0 ? (
+            <ul className="space-y-3">
+              {rows.map((destination) => (
+                <DestinationCard
+                  key={destination.id}
+                  destination={destination}
+                  onTest={() => test.mutate(destination.id)}
+                  onPrimary={() => primary.mutate(destination.id)}
+                  onRemove={() => remove.mutate(destination.id)}
+                />
+              ))}
+            </ul>
+          ) : null}
+          <Card>
+            <h3 className="mb-3 font-display text-xl">Add a bucket</h3>
+            <form
+              className="grid gap-3 md:grid-cols-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                create.mutate();
+              }}
+            >
+              <Field label="Name" hint="For your reference, e.g. “Firm S3 Nairobi”.">
+                <TextInput value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+              </Field>
+              <Field label="Country of the bucket" hint="Two letters, for example KE.">
+                <TextInput value={form.region_country} maxLength={2} onChange={(event) => setForm({ ...form, region_country: event.target.value })} required />
+              </Field>
+              {form.region_country.trim().toUpperCase() !== "KE" ? (
+                <Field label="Transfer basis" hint="Storing data outside Kenya is a cross-border transfer: record the legal basis.">
+                  <TextInput value={form.transfer_basis} onChange={(event) => setForm({ ...form, transfer_basis: event.target.value })} required />
+                </Field>
+              ) : null}
+              <Field label="Bucket">
+                <TextInput value={form.bucket} onChange={(event) => setForm({ ...form, bucket: event.target.value })} required />
+              </Field>
+              <Field label="Endpoint" hint="Leave blank for AWS S3. Otherwise an https:// address on the public internet.">
+                <TextInput value={form.endpoint_url} onChange={(event) => setForm({ ...form, endpoint_url: event.target.value })} placeholder="https://" />
+              </Field>
+              <Field label="Region code">
+                <TextInput value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} />
+              </Field>
+              <Field label="Folder prefix" hint="Optional.">
+                <TextInput value={form.prefix} onChange={(event) => setForm({ ...form, prefix: event.target.value })} />
+              </Field>
+              <Field label="Access key">
+                <TextInput value={form.access_key} onChange={(event) => setForm({ ...form, access_key: event.target.value })} autoComplete="off" required />
+              </Field>
+              <Field label="Secret key" hint="Stored encrypted; never shown again.">
+                <TextInput type="password" value={form.secret_key} onChange={(event) => setForm({ ...form, secret_key: event.target.value })} autoComplete="new-password" required />
+              </Field>
+              <div className="flex gap-3 md:col-span-2">
+                <Button type="submit" disabled={create.isPending}>
+                  {create.isPending ? "Saving…" : "Save bucket"}
+                </Button>
+                {rows.length === 0 ? (
+                  <Button type="button" variant="quiet" onClick={() => setShowOwn(false)}>
+                    Cancel
+                  </Button>
+                ) : null}
+              </div>
+            </form>
+          </Card>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function StorageOption({ title, body, badge, children }: { title: string; body: string; badge: string | null; children?: ReactNode }) {
+  const id = useId();
+  return (
+    <div
+      role="radio"
+      aria-checked={Boolean(badge)}
+      aria-labelledby={`${id}-title`}
+      aria-describedby={`${id}-body`}
+      className={`flex flex-col gap-3 rounded-lygo border bg-paper-raised p-4 ${badge ? "border-ink shadow-[inset_0_0_0_1px_var(--ink)]" : "border-line"}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <h2 id={`${id}-title`} className="font-display text-2xl">
+          {title}
+        </h2>
+        {badge ? <span className="rounded-full bg-ink px-2 py-0.5 text-xs font-semibold text-paper">{badge}</span> : null}
       </div>
+      <p id={`${id}-body`} className="text-sm text-ink-soft">
+        {body}
+      </p>
+      {children ? <div className="mt-auto">{children}</div> : null}
+    </div>
   );
 }
 
@@ -533,7 +632,7 @@ function DestinationCard({
           <h3 className="font-display text-xl">{destination.name}</h3>
           <p className="text-sm text-ink-soft">
             {destination.region_country}
-            {destination.is_primary ? " · Primary" : ""} · {health}
+            {destination.is_primary ? " · In use" : ""} · {health}
           </p>
           {destination.transfer_basis ? <p className="text-sm">Transfer basis: {destination.transfer_basis}</p> : null}
           {destination.last_tested_at ? <p className="text-sm text-ink-soft">Tested {formatWhen(destination.last_tested_at)}</p> : null}
@@ -551,9 +650,11 @@ function DestinationCard({
           <Button type="button" variant="quiet" onClick={onTest}>
             Test
           </Button>
-          <Button type="button" variant="quiet" onClick={onPrimary} disabled={destination.is_primary}>
-            Make primary
-          </Button>
+          {destination.is_primary ? null : (
+            <Button type="button" variant="quiet" onClick={onPrimary} disabled={destination.health?.ok !== true} title={destination.health?.ok === true ? undefined : "Test the connection first"}>
+              Use this bucket
+            </Button>
+          )}
           <Button type="button" variant="ghost" onClick={onRemove}>
             Remove
           </Button>
