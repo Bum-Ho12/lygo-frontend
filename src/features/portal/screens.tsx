@@ -2,97 +2,152 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api/browser";
-import { apiPaths } from "@/lib/api/paths";
-import type { NotificationPreferences } from "@/lib/api/types";
-import { collect, useClientDocuments, useDeadlines, useFirmMatters, useNotificationPreferences, useReports, useResource } from "@/features/queries";
-import { formatWhen } from "@/lib/format";
-import { useTenant } from "@/lib/tenancy/context";
-import { ChatPanel } from "@/components/chat-panel";
+import { useQueries } from "@tanstack/react-query";
+import { apiList } from "@/lib/api/browser";
+import { apiPaths, withCursor } from "@/lib/api/paths";
+import type { Deadline, DocumentRow, Matter } from "@/lib/api/types";
+import { collect, useList, useResource } from "@/features/queries";
+import { documentStatusLabel, formatWhen, workStatusLabel } from "@/lib/format";
+import { usePermission, useTenant } from "@/lib/tenancy/context";
 import { DocumentScreen } from "@/components/document-screen";
-import { Button, Card, PageHeader } from "@/components/ui";
-import { EmptyState, QueryState } from "@/components/states";
 import { UploadDropzone } from "@/components/upload";
-import type { Matter } from "@/lib/api/types";
+import { AssistantScreen } from "@/features/assistant/screen";
+import { SearchScreen } from "@/features/workspace/screens";
+import { Card, Field, PageHeader, Select } from "@/components/ui";
+import { QueryState } from "@/components/states";
 
 function usePortal() {
   const { membership, firm, user } = useTenant();
   return {
     firmId: membership.firm_id ?? "",
-    clientId: membership.client_id,
+    clientId: membership.client_id ?? "",
     slug: membership.firm_slug ?? "",
     firmName: firm?.name ?? membership.firm_name ?? "your firm",
     user,
-    firm,
-    approvalMode: Boolean(firm?.ai_settings?.approval_mode),
   };
-}
-
-function NeedsClient() {
-  return <EmptyState title="Choose a client" body="This portal view needs a client membership. Firm admins can open a client from the workspace." />;
 }
 
 export function PortalHome() {
   const { firmId, clientId, slug, firmName } = usePortal();
-  const { matters, isLoading, error } = useFirmMatters(firmId);
-  const documents = useClientDocuments(firmId, clientId);
-  if (!clientId) return <NeedsClient />;
-  const mine = matters.filter((matter) => matter.client_id === clientId);
+  const matters = useList<Matter>(["firm", firmId, "client", clientId, "matters"], clientId ? apiPaths.clientMatters(firmId, clientId) : null);
+  const documents = useList<DocumentRow>(["firm", firmId, "client", clientId, "documents"], clientId ? apiPaths.clientDocuments(firmId, clientId) : null);
+  const matterItems = collect(matters).slice(0, 4);
+  const deadlines = useQueries({
+    queries: matterItems.map((matter) => ({
+      queryKey: ["firm", firmId, "deadlines", matter.id],
+      queryFn: () => apiList<Deadline>(withCursor(apiPaths.deadlines(firmId, matter.id), null, 10)),
+    })),
+  });
+  const upcoming = deadlines.flatMap((query, index) =>
+    (query.data?.items ?? [])
+      .filter((item) => item.status === "open")
+      .map((item) => ({ ...item, matterTitle: matterItems[index]?.title ?? "Matter" })),
+  );
+
   return (
     <div className="space-y-6">
-      <PageHeader title={firmName} lede="Matter status, recent documents, and a place to upload." />
-      <Link href={`/f/${slug}/portal/documents`} className="inline-flex rounded-lygo bg-brand px-4 py-2 text-sm font-semibold text-brand-foreground">
-        Upload a document
-      </Link>
-      <QueryState isLoading={isLoading} error={error} empty={{ when: mine.length === 0, title: "No matters yet" }}>
-        <div className="space-y-3">
-          {mine.map((matter) => (
-            <Card key={matter.id}>
-              <Link href={`/f/${slug}/portal/matters/${matter.id}`} className="font-display text-2xl">
-                {matter.title}
-              </Link>
-              <p className="text-sm text-ink-soft">{matter.status ?? "Open"}</p>
-            </Card>
+      <PageHeader title={firmName} lede="Your matters, what is coming up, and the documents the firm has shared with you." />
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl">Coming up</h2>
+        {upcoming.length === 0 ? <p className="text-sm text-ink-soft">No open deadlines.</p> : null}
+        <ul className="space-y-2">
+          {upcoming.map((item) => (
+            <li key={item.id} className="rounded-lygo border border-line bg-paper-raised px-3 py-2 text-sm">
+              <span className="font-medium">{item.title}</span>
+              <span className="block text-ink-soft">
+                {item.matterTitle} · {formatWhen(item.due_at)}
+              </span>
+            </li>
           ))}
-        </div>
+        </ul>
+      </section>
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl">Matters</h2>
+        <ul className="space-y-2">
+          {collect(matters).map((matter) => (
+            <li key={matter.id}>
+              <Link href={`/f/${slug}/portal/matters/${matter.id}`} className="block rounded-lygo border border-line px-4 py-3">
+                <span className="font-medium">{matter.title}</span>
+                <span className="block text-sm text-ink-soft">{workStatusLabel(matter.status)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl">Recent documents</h2>
+        <ul className="space-y-2">
+          {collect(documents)
+            .slice(0, 5)
+            .map((doc) => (
+              <li key={doc.id}>
+                <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line px-4 py-3 text-sm">
+                  <span className="font-medium">{doc.title}</span>
+                  <span className="block text-ink-soft">
+                    {documentStatusLabel(doc.status)} · {formatWhen(doc.created_at)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+export function PortalMatters() {
+  const { firmId, clientId, slug } = usePortal();
+  const matters = useList<Matter>(["firm", firmId, "client", clientId, "matters"], clientId ? apiPaths.clientMatters(firmId, clientId) : null);
+  const [status, setStatus] = useState("open");
+  const rows = collect(matters).filter((matter) => status === "all" || matter.status === status);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Your matters" lede="Each matter is a piece of work the firm is handling for you, with its own deadlines and documents." />
+      <Field label="Show">
+        <Select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="open">Open</option>
+          <option value="on_hold">On hold</option>
+          <option value="closed">Closed</option>
+          <option value="all">All</option>
+        </Select>
+      </Field>
+      <QueryState isLoading={matters.isLoading} error={matters.error} empty={{ when: rows.length === 0, title: "Nothing in this list" }}>
+        <ul className="space-y-2">
+          {rows.map((matter) => (
+            <li key={matter.id}>
+              <Link href={`/f/${slug}/portal/matters/${matter.id}`} className="block rounded-lygo border border-line bg-paper-raised px-4 py-3">
+                <span className="font-medium">{matter.title}</span>
+                <span className="block text-sm text-ink-soft">
+                  {workStatusLabel(matter.practice_area)} · {workStatusLabel(matter.status)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       </QueryState>
-      <h2 className="font-display text-xl">Recent documents</h2>
-      <ul className="space-y-2">
-        {collect(documents).slice(0, 5).map((doc) => (
-          <li key={doc.id}>
-            <Link className="underline" href={`/f/${slug}/portal/documents/${doc.id}`}>
-              {doc.title}
-            </Link>
-            <span className="ml-2 text-sm text-ink-soft">{doc.status}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
 
 export function PortalDocuments() {
   const { firmId, clientId, slug } = usePortal();
-  const documents = useClientDocuments(firmId, clientId);
-  if (!clientId) return <NeedsClient />;
+  const documents = useList<DocumentRow>(["firm", firmId, "client", clientId, "documents"], clientId ? apiPaths.clientDocuments(firmId, clientId) : null);
+  const canUpload = usePermission("documents.upload");
   return (
     <div className="space-y-6">
-      <PageHeader title="Documents" lede="Photos and files are stored with the firm, then read for flags." />
-      <UploadDropzone
-        firmId={firmId}
-        camera
-        presignPath={apiPaths.clientPresign(firmId, clientId)}
-        confirmPath={apiPaths.clientDocuments(firmId, clientId)}
-      />
+      <PageHeader title="Documents" lede="Files for your matters. A photo of a paper document is fine." />
+      {canUpload && clientId ? <UploadDropzone firmId={firmId} uploadPath={apiPaths.clientDocuments(firmId, clientId)} camera /> : null}
       <QueryState isLoading={documents.isLoading} error={documents.error} empty={{ when: collect(documents).length === 0, title: "No documents yet" }}>
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {collect(documents).map((doc) => (
             <li key={doc.id}>
-              <Link className="text-lg underline" href={`/f/${slug}/portal/documents/${doc.id}`}>
-                {doc.title}
+              <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line bg-paper-raised px-4 py-3 text-sm">
+                <span className="font-medium">{doc.title || doc.original_filename}</span>
+                <span className="block text-ink-soft">
+                  {documentStatusLabel(doc.status)} · version {doc.version_no} · {formatWhen(doc.created_at)}
+                </span>
               </Link>
-              <p className="text-sm text-ink-soft">{doc.status}</p>
             </li>
           ))}
         </ul>
@@ -106,65 +161,56 @@ export function PortalDocument({ documentId }: { documentId: string }) {
 }
 
 export function PortalAssistant() {
-  const { firmId, clientId, firmName, approvalMode } = usePortal();
-  const { matters } = useFirmMatters(firmId);
-  const [matterId, setMatterId] = useState("");
-  if (!clientId) return <NeedsClient />;
-  const mine = matters.filter((matter) => matter.client_id === clientId);
-  return (
-    <div className="space-y-4">
-      <PageHeader title="Assistant" lede={`Reading level: plain language from ${firmName}.`} />
-      {mine.length > 0 ? (
-        <label className="block text-sm">
-          Matter
-          <select className="mt-1 w-full rounded-lygo border border-line bg-paper-raised px-3 py-2" value={matterId} onChange={(event) => setMatterId(event.target.value)}>
-            <option value="">All of my documents</option>
-            {mine.map((matter: Matter) => (
-              <option key={matter.id} value={matter.id}>
-                {matter.title}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      <ChatPanel firmId={firmId} audience="client" clientId={clientId} matterId={matterId || undefined} firmName={firmName} approvalMode={approvalMode} />
-    </div>
-  );
+  return <AssistantScreen />;
 }
 
 export function PortalMatter({ matterId }: { matterId: string }) {
-  const { firmId } = usePortal();
+  const { firmId, slug, clientId } = usePortal();
   const matter = useResource<Matter>(["firm", firmId, "matters", matterId], apiPaths.matter(firmId, matterId));
-  const deadlines = useDeadlines(firmId, matterId);
-  const reports = useReports(firmId);
-  const shared = collect(reports).filter((report) => report.matter_id === matterId);
+  const deadlines = useList<Deadline>(["firm", firmId, "deadlines", matterId], apiPaths.deadlines(firmId, matterId));
+  const documents = useList<DocumentRow>(["firm", firmId, "client", clientId, "documents"], clientId ? apiPaths.clientDocuments(firmId, clientId) : null);
+  const mine = collect(documents).filter((doc) => doc.matter_id === matterId);
+
   return (
     <QueryState isLoading={matter.isLoading} error={matter.error}>
       {matter.data ? (
-        <div className="space-y-4">
-          <PageHeader title={matter.data.title} lede={matter.data.status} />
-          <h2 className="font-display text-xl">Deadlines</h2>
-          <ul className="space-y-1 text-sm">
-            {(deadlines.data ?? []).map((deadline) => (
-              <li key={deadline.id}>
-                {formatWhen(deadline.due_at)} · {deadline.kind || "Deadline"}
-              </li>
-            ))}
-          </ul>
-          <h2 className="font-display text-xl">Shared reports</h2>
-          {shared.length === 0 ? <p className="text-sm text-ink-soft">None yet.</p> : null}
-          <ul className="space-y-1 text-sm">
-            {shared.map((report) => (
-              <li key={report.id}>
-                {report.type} · {report.status}
-                {report.download_url ? (
-                  <a className="ml-2 underline" href={report.download_url}>
-                    Download
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+        <div className="space-y-6">
+          <PageHeader
+            title={matter.data.title}
+            lede={`${workStatusLabel(matter.data.practice_area)} · ${workStatusLabel(matter.data.status)}`}
+            action={
+              <Link href={`/f/${slug}/portal/matters`} className="text-sm underline">
+                All matters
+              </Link>
+            }
+          />
+          <section className="space-y-2">
+            <h2 className="font-display text-2xl">Deadlines</h2>
+            {collect(deadlines).length === 0 ? <p className="text-sm text-ink-soft">None listed.</p> : null}
+            <ul className="space-y-2">
+              {collect(deadlines).map((deadline) => (
+                <li key={deadline.id} className="rounded-lygo border border-line px-3 py-2 text-sm">
+                  <span className="font-medium">{deadline.title}</span>
+                  <span className="block text-ink-soft">
+                    {formatWhen(deadline.due_at)} · {workStatusLabel(deadline.status)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="space-y-2">
+            <h2 className="font-display text-2xl">Documents</h2>
+            {mine.length === 0 ? <p className="text-sm text-ink-soft">No documents on this matter.</p> : null}
+            <ul className="space-y-2">
+              {mine.map((doc) => (
+                <li key={doc.id}>
+                  <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line px-3 py-2 text-sm">
+                    {doc.title} · {documentStatusLabel(doc.status)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
       ) : null}
     </QueryState>
@@ -172,51 +218,35 @@ export function PortalMatter({ matterId }: { matterId: string }) {
 }
 
 export function PortalSettings() {
-  const { user, firm } = usePortal();
-  const preferences = useNotificationPreferences();
-  const [draft, setDraft] = useState<NotificationPreferences | null>(null);
-  const queryClient = useQueryClient();
-  const current = draft ?? preferences.data ?? {};
-  const save = useMutation({
-    mutationFn: () => api(apiPaths.notificationPreferences(), { method: "PATCH", body: current }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["me", "notification-preferences"] }),
-  });
+  const { user, firmName } = usePortal();
   return (
-    <div className="space-y-4">
-      <PageHeader title="Settings" />
+    <div className="space-y-6">
+      <PageHeader title="Your details" lede={`You are signed in with ${firmName}.`} />
       <Card>
-        <p className="font-semibold">{user.name}</p>
-        <p className="text-sm text-ink-soft">{user.email}</p>
-        <p className="text-sm text-ink-soft">{user.phone || "No phone on the profile"}</p>
-        <p className="text-sm text-ink-soft">Language: {user.locale || "en"}</p>
-      </Card>
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          save.mutate();
-        }}
-      >
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={current.email_enabled !== false} onChange={(event) => setDraft({ ...current, email_enabled: event.target.checked })} />
-          Email
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={Boolean(current.sms_enabled)} onChange={(event) => setDraft({ ...current, sms_enabled: event.target.checked })} />
-          SMS nudges
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={current.quiet_hours !== false} onChange={(event) => setDraft({ ...current, quiet_hours: event.target.checked })} />
-          Quiet hours, 21:00–07:00 East Africa Time
-        </label>
-        <Button type="submit">Save notifications</Button>
-      </form>
-      <Card>
-        <h2 className="font-display text-xl">Consents</h2>
-        <p className="mt-2 text-sm text-ink-soft">
-          {firm?.name ?? "Your firm"} records consent for sensitive data and for any storage destination outside Kenya. SMS never includes case details.
+        <dl className="space-y-2 text-sm">
+          <div>
+            <dt className="text-ink-soft">Name</dt>
+            <dd>{user.name || "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-ink-soft">Email</dt>
+            <dd>{user.email}</dd>
+          </div>
+          <div>
+            <dt className="text-ink-soft">Language</dt>
+            <dd>{user.locale || "en"}</dd>
+          </div>
+        </dl>
+        <p className="mt-4 text-sm">
+          <Link href="/account" className="underline">
+            Password, phone, and sign-in checks
+          </Link>
         </p>
       </Card>
     </div>
   );
+}
+
+export function PortalSearch() {
+  return <SearchScreen />;
 }

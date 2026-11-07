@@ -62,6 +62,16 @@ export function toProblem(status: number, body: unknown): Problem {
 
 export function problemMessage(problem: Problem): string {
   if (problem.code === "csrf") return "Please refresh the page and try again.";
+  if (problem.code === "search_unavailable") return "Search isn't ready yet. Please try again later.";
+  if (problem.code === "licence_not_confirmed") return "Confirm the licence before loading that law.";
+  if (problem.code === "validation_error") return "Please check what you entered and try again.";
+  if (problem.code === "not_processed") return "That document isn't ready to compare yet.";
+  if (problem.code === "ai_unavailable") return "The assistant isn't available right now. Please try again in a moment.";
+  if (problem.code === "ai_quota_exceeded") return "This firm has reached its monthly limit for the assistant.";
+  if (problem.code === "reauth_failed") return "That confirmation didn't match. Check your password and try again.";
+  if (problem.code === "invalid_reset") return "This reset link is invalid or has expired. Request a new one.";
+  if (problem.code === "not_indexed") return "That document isn't ready to summarise yet.";
+  if (problem.code === "not_pending") return "That answer is no longer waiting for review.";
   if (problem.code === "api_unavailable" || problem.status === 503) {
     return "Lygo isn't available right now. Please try again in a moment.";
   }

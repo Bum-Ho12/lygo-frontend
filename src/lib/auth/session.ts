@@ -12,12 +12,12 @@ export async function establishSession(
   return NextResponse.json({ ok: true, mfa_required: false });
 }
 
-export async function rememberMfa(token: string, sharedDevice: boolean) {
+export async function rememberMfa(token: string, methods: string[], sharedDevice: boolean) {
   const jar = await cookies();
   const secure = cookieSecure();
   jar.set(COOKIE.mfa, token, { path: "/", httpOnly: true, sameSite: "lax", secure, maxAge: 5 * 60 });
   if (sharedDevice) {
     jar.set(COOKIE.shared, "1", { path: "/", httpOnly: true, sameSite: "lax", secure, maxAge: 5 * 60 });
   }
-  return NextResponse.json({ ok: true, mfa_required: true });
+  return NextResponse.json({ ok: true, mfa_required: true, methods });
 }

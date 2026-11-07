@@ -1,21 +1,48 @@
 const DOCUMENT_STATUS_LABELS: Record<string, string> = {
   received: "Received",
   stored: "Saved",
+  parse: "Reading the file",
+  structure: "Finding the clauses",
+  classify: "Identifying the document",
+  rules: "Checking for issues",
   scanning: "Checking the file",
   ocr: "Reading the scan",
   parsing: "Reading the document",
   classifying: "Identifying the document",
   flagging: "Checking for issues",
-  chunking: "Preparing it for questions",
-  embedding: "Preparing it for questions",
+  processed: "Ready",
   indexed: "Ready",
   failed: "Couldn't finish",
-  quarantined: "Held for a safety check",
+  error: "Needs attention",
+  skipped: "Skipped",
+  ok: "Done",
   needs_review: "Needs a person to check it",
 };
 
 export function documentStatusLabel(status: string): string {
   return DOCUMENT_STATUS_LABELS[status] ?? "In progress";
+}
+
+export function workStatusLabel(status: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    open: "Open",
+    in_progress: "In progress",
+    done: "Done",
+    dismissed: "Dismissed",
+    closed: "Closed",
+    on_hold: "On hold",
+    acknowledged: "Acknowledged",
+    active: "Active",
+    suspended: "Suspended",
+    normal: "Standard",
+    sensitive: "Restricted",
+    confirmed: "Confirmed",
+    unconfirmed: "Not confirmed",
+    individual: "Person",
+    business: "Business",
+  };
+  if (!status) return "—";
+  return labels[status] ?? labelize(status);
 }
 
 export function taskStatusLabel(status: string | undefined): string {

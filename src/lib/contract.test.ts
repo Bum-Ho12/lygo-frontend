@@ -7,14 +7,35 @@ import { destinationFor, homeFor, pickMembership } from "@/lib/auth/routing";
 import { interpretChatEvent, parseSseBlock } from "@/lib/chat/sse";
 import type { Flag, Membership } from "@/lib/api/types";
 
+const flag = (partial: Partial<Flag> & Pick<Flag, "id" | "status">): Flag => ({
+  document_id: "d",
+  rule_id: "rule",
+  severity: "info",
+  title: "Check",
+  explanation: "Look at this.",
+  span: null,
+  extracted: {},
+  resolution_note: "",
+  ...partial,
+});
+
 describe("api paths", () => {
-  it("keeps the documented resource paths", () => {
-    expect(apiPaths.knowledgePresign("firm")).toBe("/firms/firm/knowledge/uploads:presign");
-    expect(apiPaths.clientPresign("firm", "client")).toBe("/firms/firm/clients/client/uploads:presign");
+  it("matches the routes the API serves", () => {
+    expect(apiPaths.knowledgeDocuments("firm")).toBe("/firms/firm/knowledge/documents");
+    expect(apiPaths.clientDocuments("firm", "client")).toBe("/firms/firm/clients/client/documents");
     expect(apiPaths.reprocess("firm", "doc")).toBe("/firms/firm/documents/doc:reprocess");
-    expect(apiPaths.approve("firm", "out")).toBe("/firms/firm/ai-outputs/out:approve");
-    expect(apiPaths.messages("firm", "chat")).toBe("/firms/firm/chats/chat/messages");
-    expect(apiPaths.analytics("firm")).toBe("/firms/firm/analytics/overview");
+    expect(apiPaths.compare("firm")).toBe("/firms/firm/comparisons");
+    expect(apiPaths.acceptInvitation()).toBe("/invitations/accept");
+    expect(apiPaths.search("firm")).toBe("/firms/firm/search");
+    expect(apiPaths.tasks("firm", "open")).toBe("/firms/firm/tasks?status=open");
+    expect(apiPaths.storagePrimary("firm")).toBe("/firms/firm/storage-policy/primary");
+    expect(apiPaths.deadline("firm", "matter", "due")).toBe("/firms/firm/matters/matter/deadlines/due");
+    expect(apiPaths.chats("firm")).toBe("/firms/firm/chats");
+    expect(apiPaths.aiSettings("firm")).toBe("/firms/firm/ai-settings");
+    expect(apiPaths.approveOutput("firm", "message")).toBe("/firms/firm/ai-outputs/message:approve");
+    expect(apiPaths.facts("firm", "matter")).toBe("/firms/firm/matters/matter/facts");
+    expect(apiPaths.corpusSection("doc", "s.12")).toBe("/corpus/documents/doc/sections/s.12");
+    expect(apiPaths.corpusSection("doc", "s.12 (1)")).toBe("/corpus/documents/doc/sections/s.12%20(1)");
     expect(withCursor("/firms/firm/clients?matter_id=m", "abc", 10)).toBe("/firms/firm/clients?matter_id=m&limit=10&cursor=abc");
   });
 });
@@ -62,12 +83,9 @@ describe("chat citations", () => {
 });
 
 describe("flags and problems", () => {
-  it("hides unconfirmed AI flags from clients", () => {
-    const flags: Flag[] = [
-      { id: "1", severity: "critical", title: "Gap", explanation: "Missing", source: "ai", status: "open" },
-      { id: "2", severity: "info", title: "Date", explanation: "Check", source: "rule", status: "open" },
-    ];
-    expect(visibleFlags(flags, "client").map((flag) => flag.id)).toEqual(["2"]);
+  it("hides dismissed flags from clients", () => {
+    const flags: Flag[] = [flag({ id: "1", status: "dismissed", severity: "critical", title: "Gap" }), flag({ id: "2", status: "open" })];
+    expect(visibleFlags(flags, "client").map((item) => item.id)).toEqual(["2"]);
     expect(visibleFlags(flags, "advocate")).toHaveLength(2);
   });
 
@@ -84,6 +102,12 @@ describe("flags and problems", () => {
   it("reads a FastAPI validation message when it is plain language", () => {
     expect(problemMessage(toProblem(422, { detail: "That email is already in use." }))).toBe("That email is already in use.");
     expect(problemMessage(toProblem(404, { detail: "Not Found" }))).toBe("We couldn't find that.");
+    expect(problemMessage(toProblem(422, { title: "Validation", status: 422, code: "validation_error", detail: "Request validation failed." }))).toBe(
+      "Please check what you entered and try again.",
+    );
+    expect(problemMessage(toProblem(403, { title: "Confirmation failed", status: 403, code: "reauth_failed", detail: "Your password is not correct." }))).toBe(
+      "That confirmation didn't match. Check your password and try again.",
+    );
   });
 });
 

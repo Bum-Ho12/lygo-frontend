@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -14,7 +15,15 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <p className="text-sm text-paper/60">Africa/Nairobi · en-KE</p>
       </section>
       <section className="flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md">{children}</div>
+        <div className="w-full max-w-md">
+          <Link
+            href="/"
+            className="mb-8 inline-flex items-center justify-center rounded-lygo border border-line bg-paper-raised px-3 py-2 text-sm font-semibold hover:bg-paper"
+          >
+            Home
+          </Link>
+          {children}
+        </div>
       </section>
     </div>
   );

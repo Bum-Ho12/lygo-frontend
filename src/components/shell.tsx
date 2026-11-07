@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { readCsrf } from "@/lib/api/browser";
-import { useNotifications } from "@/features/queries";
-import { formatWhen } from "@/lib/format";
 import { Button } from "@/components/ui";
 
 export type NavItem = { href: string; label: string; exact?: boolean };
@@ -31,9 +29,6 @@ export function AppShell({
   footer?: ReactNode;
 }) {
   const pathname = usePathname();
-  const notifications = useNotifications();
-  const [open, setOpen] = useState(false);
-  const items = notifications.data?.items ?? [];
 
   return (
     <div className={`min-h-screen bg-paper text-ink ${portal ? "md:grid md:grid-cols-[220px_1fr]" : "md:grid md:grid-cols-[240px_1fr]"}`}>
@@ -43,7 +38,7 @@ export function AppShell({
       <aside className="hidden border-r border-line bg-ink text-paper md:flex md:min-h-screen md:flex-col md:px-4 md:py-6">
         <p className="font-display text-2xl">Lygo</p>
         <p className="mt-1 text-sm text-paper/70">{title}</p>
-        <nav className="mt-8 flex flex-1 flex-col gap-1" aria-label={title}>
+        <nav className="mt-8 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto" aria-label={title}>
           {nav.map((item) => (
             <Link
               key={item.href}
@@ -64,29 +59,12 @@ export function AppShell({
             {subtitle ? <p className="text-sm text-ink-soft">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="quiet" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-              Updates
-              <span className="sr-only">, {items.length} shown</span>
-            </Button>
+            <Link href="/account" className="text-sm font-semibold">
+              Account
+            </Link>
             <SignOut />
           </div>
         </header>
-        {open ? (
-          <div className="border-b border-line bg-paper-raised px-4 py-3 md:px-8">
-            {notifications.isLoading ? <p>Loading updates…</p> : null}
-            {notifications.error ? <p>Updates are unavailable.</p> : null}
-            {!notifications.isLoading && items.length === 0 ? <p className="text-sm text-ink-soft">No notifications.</p> : null}
-            <ul className="space-y-2">
-              {items.map((item) => (
-                <li key={item.id} className="text-sm">
-                  <span className="font-medium">{item.title || item.template || "Update"}</span>
-                  {item.body ? <span className="block text-ink-soft">{item.body}</span> : null}
-                  <span className="text-ink-soft">{formatWhen(item.created_at)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
         <main id="main" className="px-4 py-6 md:px-8">
           {children}
         </main>

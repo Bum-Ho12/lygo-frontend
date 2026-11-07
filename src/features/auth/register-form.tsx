@@ -4,18 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { z } from "zod";
-import { apiList } from "@/lib/api/browser";
-import { apiPaths, withCursor } from "@/lib/api/paths";
-import { problemMessage, toProblem } from "@/lib/api/problem";
-import type { Membership } from "@/lib/api/types";
+import { api } from "@/lib/api/browser";
+import { apiPaths } from "@/lib/api/paths";
+import { ApiError, problemMessage, toProblem } from "@/lib/api/problem";
+import { loadMemberships } from "@/lib/auth/memberships";
 import { destinationFor } from "@/lib/auth/routing";
 import { Button, Field, TextInput } from "@/components/ui";
 
 const schema = z.object({
   name: z.string().min(2, "Enter your name."),
   email: z.string().email("Enter a valid email."),
-  password: z.string().min(8, "Use at least 8 characters."),
-  phone: z.string().optional(),
+  password: z
+    .string()
+    .min(12, "Use at least 12 characters.")
+    .refine((value) => new Set(value).size >= 5, "Use a less repetitive password."),
 });
 
 export function RegisterForm({ invitationToken }: { invitationToken?: string }) {
@@ -23,7 +25,6 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -32,7 +33,7 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
       className="space-y-4"
       onSubmit={async (event) => {
         event.preventDefault();
-        const parsed = schema.safeParse({ name, email, password, phone: phone || undefined });
+        const parsed = schema.safeParse({ name, email, password });
         if (!parsed.success) {
           setError(parsed.error.issues[0]?.message ?? "Check the form.");
           return;
@@ -42,7 +43,7 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...parsed.data, invitation_token: invitationToken }),
+          body: JSON.stringify(parsed.data),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -50,26 +51,42 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
           setError(problemMessage(toProblem(res.status, data)));
           return;
         }
-        if (data.mfa_required) {
-          router.push("/mfa");
+        const login = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: parsed.data.email, password: parsed.data.password }),
+        });
+        if (!login.ok) {
+          setPending(false);
+          setError("Your account is ready. Sign in to continue.");
           return;
         }
-        const memberships = await apiList<Membership>(withCursor(apiPaths.memberships(), null, 100));
-        router.push(destinationFor(memberships.items, null));
-        router.refresh();
+        try {
+          if (invitationToken) {
+            await api(apiPaths.acceptInvitation(), { method: "POST", body: { token: invitationToken } });
+          }
+          const memberships = await loadMemberships();
+          router.push(destinationFor(memberships, null));
+          router.refresh();
+        } catch (err) {
+          setPending(false);
+          setError(err instanceof ApiError ? problemMessage(err.problem) : "Your account is ready. Sign in to continue.");
+        }
       }}
     >
       <h1 className="font-display text-4xl">{invitationToken ? "Accept invitation" : "Create account"}</h1>
+      <p className="text-sm text-ink-soft">
+        {invitationToken
+          ? "Create your account, then we'll attach this invitation. If you already have an account, sign in first."
+          : "Use at least 12 characters, and don't repeat the same few characters."}
+      </p>
       <Field label="Name">
         <TextInput value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" required />
       </Field>
       <Field label="Email">
         <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required />
       </Field>
-      <Field label="Phone" hint="Optional. Use +254… if you want SMS.">
-        <TextInput value={phone} onChange={(event) => setPhone(event.target.value)} autoComplete="tel" />
-      </Field>
-      <Field label="Password">
+      <Field label="Password" hint="At least 12 characters.">
         <TextInput type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" required />
       </Field>
       {error ? (
@@ -81,7 +98,7 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
         {pending ? "Saving…" : invitationToken ? "Join" : "Create account"}
       </Button>
       <p className="text-sm">
-        <Link href="/login" className="underline">
+        <Link href={invitationToken ? `/login?next=${encodeURIComponent(`/invite/${invitationToken}`)}` : "/login"} className="underline">
           I already have an account
         </Link>
       </p>

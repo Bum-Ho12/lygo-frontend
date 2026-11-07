@@ -1,32 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/browser";
 import { apiPaths } from "@/lib/api/paths";
-import type { AiSettings, ApiKey, Branding, Client, Member, Role, RulePack, StorageDestination, StoragePolicy } from "@/lib/api/types";
-import { isAcceptedJob } from "@/lib/api/types";
-import {
-  collect,
-  useAnalytics,
-  useApiKeys,
-  useAudit,
-  useDestinations,
-  useJob,
-  useMembers,
-  useResource,
-  useRulePacks,
-  useStoragePolicy,
-  useWebhooks,
-} from "@/features/queries";
-import { useList } from "@/features/queries";
+import type { Branding, Client, FirmNotification, Member, StorageDestination, Task } from "@/lib/api/types";
+import { collect, useDestinations, useFirmMatters, useList, useMembers, useResource } from "@/features/queries";
 import { meetsAa } from "@/lib/color";
-import { formatWhen, taskStatusLabel } from "@/lib/format";
-import { useTenant } from "@/lib/tenancy/context";
+import { formatWhen, labelize, workStatusLabel } from "@/lib/format";
+import { usePermission, useTenant } from "@/lib/tenancy/context";
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from "@/components/ui";
-import { DataTable, RecordView } from "@/components/record-view";
-import { LoadMore, QueryState, errorText } from "@/components/states";
+import { DataTable } from "@/components/record-view";
+import { EmptyState, LoadMore, QueryState, errorText } from "@/components/states";
+
+const FIRM_ROLE_OPTIONS = ["firm_owner", "firm_admin", "advocate", "paralegal", "viewer"];
+
+type PendingInvite = { id: string; email: string; role: string; expires_at: string; expired: boolean };
 
 function useFirmId() {
   const { membership, firm } = useTenant();
@@ -34,704 +24,675 @@ function useFirmId() {
 }
 
 export function OverviewScreen() {
-  const { firmId, firm } = useFirmId();
-  const usage = useResource<Record<string, unknown>>(["firm", firmId, "usage"], apiPaths.usage(firmId));
-  const analytics = useAnalytics(firmId);
-  const destinations = useDestinations(firmId);
+  const { firmId, firm, slug } = useFirmId();
+  const queryClient = useQueryClient();
+  const { clientItems, clients, matters, isLoading, error } = useFirmMatters(firmId);
+  const members = useMembers(firmId);
+  const tasks = useList<Task>(["firm", firmId, "tasks", "open"], apiPaths.tasks(firmId, "open"));
+  const [name, setName] = useState("");
+  const save = useMutation({
+    mutationFn: () => api<typeof firm>(apiPaths.firm(firmId), { method: "PATCH", body: { name } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId] }),
+  });
+  const openTasks = collect(tasks).filter((task) => task.status !== "done");
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Overview" lede="Seats, documents, storage health, and the compliance reminders for this firm." />
-      <div className="grid gap-4 md:grid-cols-3">
+      <PageHeader title={firm?.name ?? "Firm"} lede={`${firm?.plan ?? "Plan"} · ${slug}`} />
+      <div className="grid gap-3 sm:grid-cols-3">
         <Card>
-          <p className="text-sm text-ink-soft">Plan</p>
-          <p className="font-display text-2xl">{firm?.plan ?? "—"}</p>
+          <p className="text-sm text-ink-soft">Clients</p>
+          <p className="font-display text-3xl">{clients.isLoading ? "…" : clientItems.length}</p>
         </Card>
         <Card>
-          <p className="text-sm text-ink-soft">Data region</p>
-          <p className="font-display text-2xl">{firm?.region_pref ?? "Unset"}</p>
+          <p className="text-sm text-ink-soft">Matters</p>
+          <p className="font-display text-3xl">{isLoading ? "…" : matters.length}</p>
         </Card>
         <Card>
-          <p className="text-sm text-ink-soft">Storage</p>
-          <p className="font-display text-2xl">{collect(destinations).length} destinations</p>
+          <p className="text-sm text-ink-soft">Open tasks</p>
+          <p className="font-display text-3xl">{tasks.isLoading ? "…" : openTasks.length}</p>
         </Card>
       </div>
+      {error ? <p className="text-sm text-critical">{errorText(error)}</p> : null}
       <Card>
-        <h2 className="font-display text-xl">Compliance</h2>
-        <ul className="mt-2 list-disc pl-5 text-sm">
-          <li>ODPC registration: {firm?.odpc_registered ? "recorded" : "not recorded on the firm"}</li>
-          <li>Data processing agreement: {firm?.dpa_signed ? "signed" : "not recorded on the firm"}</li>
-          <li>Cross-border transfers need a stated legal basis when a destination is outside Kenya.</li>
-        </ul>
+        <h2 className="font-display text-xl">Firm name</h2>
+        <form
+          className="mt-3 flex flex-wrap gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (name.trim()) save.mutate();
+          }}
+        >
+          <TextInput value={name || firm?.name || ""} onChange={(event) => setName(event.target.value)} aria-label="Firm name" />
+          <Button type="submit" disabled={save.isPending}>
+            Save name
+          </Button>
+        </form>
+        {save.error ? <p className="mt-2 text-sm text-critical">{errorText(save.error)}</p> : null}
       </Card>
-      <QueryState isLoading={usage.isLoading} error={usage.error}>
-        <RecordView data={usage.data} />
-      </QueryState>
-      <QueryState isLoading={analytics.isLoading} error={analytics.error}>
-        <RecordView data={analytics.data} />
-      </QueryState>
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl">People</h2>
+        <QueryState isLoading={members.isLoading} error={members.error} empty={{ when: collect(members).length === 0, title: "No members yet" }}>
+          <ul className="space-y-2">
+            {collect(members).slice(0, 8).map((member) => (
+              <li key={member.user_id} className="rounded-lygo border border-line bg-paper-raised px-3 py-2 text-sm">
+                <span className="font-medium">{member.name || member.email}</span>
+                <span className="text-ink-soft"> · {labelize(member.role)} · {workStatusLabel(member.status)}</span>
+              </li>
+            ))}
+          </ul>
+        </QueryState>
+        <Link href={`/f/${slug}/control-center/members`} className="text-sm underline">
+          Manage members
+        </Link>
+        <Link href={`/f/${slug}/control-center/diary`} className="block text-sm underline">
+          Open the diary
+        </Link>
+      </section>
     </div>
   );
 }
 
-const roles: Role[] = ["firm_owner", "firm_admin", "advocate", "paralegal", "viewer"];
-
 export function MembersScreen() {
   const { firmId } = useFirmId();
-  const members = useMembers(firmId);
-  const rows = collect(members);
   const queryClient = useQueryClient();
+  const members = useMembers(firmId);
+  const invitations = useList<PendingInvite>(["firm", firmId, "invitations"], apiPaths.invitations(firmId));
+  const rows = collect(members).map((member) => ({ ...member, id: member.user_id }));
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("advocate");
-  const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState("advocate");
+  const [message, setMessage] = useState<string | null>(null);
   const invite = useMutation({
-    mutationFn: () => api(apiPaths.invitations(firmId), { method: "POST", body: { email, role } }),
-    onSuccess: async () => {
+    mutationFn: () => api<{ email_sent?: boolean }>(apiPaths.invitations(firmId), { method: "POST", body: { email, role } }),
+    onSuccess: (result) => {
+      setMessage(result.email_sent === false ? `Saved the invitation for ${email}, but the email could not be sent. Resend it below.` : `Invitation sent to ${email}.`);
       setEmail("");
-      await queryClient.invalidateQueries({ queryKey: ["firm", firmId, "members"] });
+      void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "invitations"] });
     },
-    onError: (caught) => setError(errorText(caught)),
+    onError: (error) => setMessage(errorText(error)),
   });
   const update = useMutation({
-    mutationFn: (body: { userId: string; role?: string; remove?: boolean }) =>
-      api(apiPaths.member(firmId, body.userId), { method: body.remove ? "DELETE" : "PATCH", body: body.remove ? undefined : { role: body.role } }),
+    mutationFn: (body: { userId: string; role?: string; status?: string; remove?: boolean }) =>
+      body.remove
+        ? api(apiPaths.member(firmId, body.userId), { method: "DELETE" })
+        : api(apiPaths.member(firmId, body.userId), { method: "PATCH", body: { role: body.role, status: body.status } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "members"] }),
+    onError: (error) => setMessage(errorText(error)),
+  });
+  const resend = useMutation({
+    mutationFn: (invitationId: string) => api<{ email_sent?: boolean }>(apiPaths.invitationResend(firmId, invitationId), { method: "POST", body: {} }),
+    onSuccess: (result) => setMessage(result.email_sent === false ? "Still couldn't send that email." : "Invitation sent again."),
+    onError: (error) => setMessage(errorText(error)),
   });
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Members" lede="Invitations, roles, and MFA status." />
-      <form
-        className="grid gap-3 md:grid-cols-[1fr_12rem_auto]"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          invite.mutate();
-        }}
-      >
-        <Field label="Email">
-          <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-        </Field>
-        <Field label="Role">
-          <Select value={role} onChange={(event) => setRole(event.target.value as Role)}>
-            {roles.map((item) => (
-              <option key={item} value={item}>
-                {item.replaceAll("_", " ")}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="flex items-end">
-          <Button type="submit">Invite</Button>
-        </div>
-      </form>
-      {error ? <p className="text-sm text-critical">{error}</p> : null}
+      <PageHeader title="Members" lede="Invite colleagues and set what they can do. The owner role can only be granted by an owner." />
+      <Card>
+        <form
+          className="grid gap-3 sm:grid-cols-[1fr_12rem_auto]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setMessage(null);
+            invite.mutate();
+          }}
+        >
+          <Field label="Email">
+            <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          </Field>
+          <Field label="Role">
+            <Select value={role} onChange={(event) => setRole(event.target.value)}>
+              {FIRM_ROLE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {labelize(option)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="self-end">
+            <Button type="submit" disabled={invite.isPending}>
+              Send invite
+            </Button>
+          </div>
+        </form>
+        {message ? <p className="mt-3 text-sm">{message}</p> : null}
+      </Card>
       <QueryState isLoading={members.isLoading} error={members.error} empty={{ when: rows.length === 0, title: "No members yet" }}>
         <DataTable
-          rows={rows.map((member) => ({ ...member, id: member.user_id }))}
+          rows={rows}
           columns={[
-            { header: "Name", cell: (member: Member & { id: string }) => member.name || member.email || member.user_id },
-            { header: "Email", cell: (member: Member & { id: string }) => member.email ?? "—" },
+            { header: "Person", cell: (row) => row.name || "—" },
+            { header: "Email", cell: (row) => row.email },
+            { header: "Role", cell: (row) => labelize(row.role) },
+            { header: "Status", cell: (row) => workStatusLabel(row.status) },
             {
-              header: "Role",
-              cell: (member: Member & { id: string }) => (
-                <Select
-                  aria-label={`Role for ${member.email ?? member.user_id}`}
-                  value={member.role}
-                  onChange={(event) => update.mutate({ userId: member.user_id, role: event.target.value })}
-                >
-                  {roles.map((item) => (
-                    <option key={item} value={item}>
-                      {item.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </Select>
-              ),
-            },
-            { header: "MFA", cell: (member: Member & { id: string }) => (member.mfa_enabled ? "On" : "Off") },
-            { header: "Status", cell: (member: Member & { id: string }) => member.status ?? "—" },
-            {
-              header: "",
-              cell: (member: Member & { id: string }) => (
-                <Button type="button" variant="quiet" onClick={() => update.mutate({ userId: member.user_id, remove: true })}>
-                  Deactivate
-                </Button>
+              header: "Change",
+              cell: (row) => (
+                <MemberActions
+                  member={row}
+                  busy={update.isPending}
+                  onRole={(next) => update.mutate({ userId: row.user_id, role: next })}
+                  onStatus={(next) => update.mutate({ userId: row.user_id, status: next })}
+                  onRemove={() => update.mutate({ userId: row.user_id, remove: true })}
+                />
               ),
             },
           ]}
         />
-        <LoadMore hasNextPage={members.hasNextPage} isFetchingNextPage={members.isFetchingNextPage} onClick={() => members.fetchNextPage()} />
+        <LoadMore hasNextPage={Boolean(members.hasNextPage)} isFetchingNextPage={members.isFetchingNextPage} onClick={() => members.fetchNextPage()} />
       </QueryState>
+      <section className="space-y-3">
+        <h2 className="font-display text-2xl">Invitations not yet accepted</h2>
+        {invitations.isLoading ? <p className="text-sm text-ink-soft">Loading invitations…</p> : null}
+        {collect(invitations).length === 0 && !invitations.isLoading ? <p className="text-sm text-ink-soft">No open invitations.</p> : null}
+        <ul className="space-y-2">
+          {collect(invitations).map((invitation) => (
+            <li key={invitation.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lygo border border-line bg-paper-raised px-3 py-2 text-sm">
+              <span>
+                {invitation.email} · {labelize(invitation.role)}
+                {invitation.expired ? " · expired" : ` · until ${formatWhen(invitation.expires_at)}`}
+              </span>
+              <Button type="button" variant="quiet" disabled={resend.isPending} onClick={() => resend.mutate(invitation.id)}>
+                Resend
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
+function MemberActions({
+  member,
+  busy,
+  onRole,
+  onStatus,
+  onRemove,
+}: {
+  member: Member;
+  busy: boolean;
+  onRole: (role: string) => void;
+  onStatus: (status: string) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Select aria-label={`Role for ${member.email}`} defaultValue={member.role} disabled={busy} onChange={(event) => onRole(event.target.value)}>
+        {FIRM_ROLE_OPTIONS.map((option) => (
+          <option key={option} value={option}>
+            {labelize(option)}
+          </option>
+        ))}
+      </Select>
+      <Button type="button" variant="quiet" disabled={busy} onClick={() => onStatus(member.status === "suspended" ? "active" : "suspended")}>
+        {member.status === "suspended" ? "Restore" : "Suspend"}
+      </Button>
+      <Button type="button" variant="ghost" disabled={busy} onClick={onRemove}>
+        Remove
+      </Button>
     </div>
   );
 }
 
 export function ClientsScreen() {
   const { firmId, slug } = useFirmId();
+  const queryClient = useQueryClient();
   const clients = useList<Client>(["firm", firmId, "clients"], apiPaths.clients(firmId));
   const rows = collect(clients);
-  const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [type, setType] = useState("individual");
-  const [clientId, setClientId] = useState("");
+  const [type, setType] = useState<"individual" | "business">("individual");
+  const [sensitivity, setSensitivity] = useState<"normal" | "sensitive">("normal");
+  const [inviteFor, setInviteFor] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const create = useMutation({
-    mutationFn: () => api(apiPaths.clients(firmId), { method: "POST", body: { name, type } }),
+    mutationFn: () => api(apiPaths.clients(firmId), { method: "POST", body: { name, type, sensitivity } }),
     onSuccess: () => {
       setName("");
-      queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] });
+      setMessage("Client added.");
+      void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] });
     },
-    onError: (caught) => setError(errorText(caught)),
+    onError: (error) => setMessage(errorText(error)),
   });
   const invite = useMutation({
-    mutationFn: () => api(apiPaths.clientInvitations(firmId, clientId), { method: "POST", body: { email, role: "client_user" } }),
-    onSuccess: () => setEmail(""),
-    onError: (caught) => setError(errorText(caught)),
+    mutationFn: () => api(apiPaths.clientInvitations(firmId, inviteFor ?? ""), { method: "POST", body: { email, role: "client_user" } }),
+    onSuccess: () => {
+      setMessage(`Portal invite sent to ${email}.`);
+      setEmail("");
+      setInviteFor(null);
+    },
+    onError: (error) => setMessage(errorText(error)),
+  });
+  const archive = useMutation({
+    mutationFn: (clientId: string) => api(apiPaths.client(firmId, clientId), { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] }),
+    onError: (error) => setMessage(errorText(error)),
   });
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Clients" lede="Individuals and businesses, plus the people who can open the portal." />
-      <form
-        className="grid gap-3 md:grid-cols-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          create.mutate();
-        }}
-      >
-        <Field label="Name">
-          <TextInput value={name} onChange={(event) => setName(event.target.value)} required />
-        </Field>
-        <Field label="Type">
-          <Select value={type} onChange={(event) => setType(event.target.value)}>
-            <option value="individual">Individual</option>
-            <option value="business">Business</option>
-          </Select>
-        </Field>
-        <div className="flex items-end">
-          <Button type="submit">Create client</Button>
-        </div>
-      </form>
-      {error ? <p className="text-sm text-critical">{error}</p> : null}
-      <QueryState isLoading={clients.isLoading} error={clients.error} empty={{ when: rows.length === 0, title: "No clients yet" }}>
-        <DataTable
-          rows={rows}
-          columns={[
-            {
-              header: "Client",
-              cell: (client) => (
-                <Link className="underline" href={`/f/${slug}/workspace/clients/${client.id}`}>
-                  {client.name}
-                </Link>
-              ),
-            },
-            { header: "Type", cell: (client) => client.type },
-            { header: "Status", cell: (client) => client.status ?? "active" },
-            {
-              header: "",
-              cell: (client) => (
-                <Button type="button" variant="quiet" onClick={() => api(apiPaths.client(firmId, client.id), { method: "PATCH", body: { status: "archived" } }).then(() => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] }))}>
-                  Archive
-                </Button>
-              ),
-            },
-          ]}
-        />
+      <PageHeader title="Clients" lede="A client is the person or business the firm acts for. Restricted clients stay out of ordinary firm search." />
+      <Card>
+        <form
+          className="grid gap-3 md:grid-cols-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            create.mutate();
+          }}
+        >
+          <Field label="Name">
+            <TextInput value={name} onChange={(event) => setName(event.target.value)} required />
+          </Field>
+          <Field label="Type">
+            <Select value={type} onChange={(event) => setType(event.target.value as "individual" | "business")}>
+              <option value="individual">Person</option>
+              <option value="business">Business</option>
+            </Select>
+          </Field>
+          <Field label="Sensitivity">
+            <Select value={sensitivity} onChange={(event) => setSensitivity(event.target.value as "normal" | "sensitive")}>
+              <option value="normal">Standard</option>
+              <option value="sensitive">Restricted</option>
+            </Select>
+          </Field>
+          <div className="self-end">
+            <Button type="submit" disabled={create.isPending}>
+              Add client
+            </Button>
+          </div>
+        </form>
+      </Card>
+      {message ? <p className="text-sm">{message}</p> : null}
+      <QueryState isLoading={clients.isLoading} error={clients.error} empty={{ when: rows.length === 0, title: "No clients yet", body: "Add the first client to open matters and receive documents." }}>
+        <ul className="space-y-3">
+          {rows.map((client) => (
+            <li key={client.id} className="rounded-lygo border border-line bg-paper-raised p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <Link href={`/f/${slug}/workspace/clients/${client.id}`} className="font-display text-xl">
+                    {client.name}
+                  </Link>
+                  <p className="text-sm text-ink-soft">
+                    {workStatusLabel(client.type)} · {workStatusLabel(client.sensitivity)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="quiet" onClick={() => setInviteFor(client.id)}>
+                    Invite to portal
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => archive.mutate(client.id)}>
+                    Archive
+                  </Button>
+                </div>
+              </div>
+              {inviteFor === client.id ? (
+                <form
+                  className="mt-3 flex flex-wrap gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    invite.mutate();
+                  }}
+                >
+                  <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Client email" required aria-label="Portal email" />
+                  <Button type="submit" disabled={invite.isPending}>
+                    Send
+                  </Button>
+                </form>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <LoadMore hasNextPage={Boolean(clients.hasNextPage)} isFetchingNextPage={clients.isFetchingNextPage} onClick={() => clients.fetchNextPage()} />
       </QueryState>
-      <form
-        className="grid gap-3 md:grid-cols-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (clientId) invite.mutate();
-        }}
-      >
-        <Field label="Portal invite for">
-          <Select value={clientId} onChange={(event) => setClientId(event.target.value)} required>
-            <option value="">Select a client</option>
-            {rows.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Email">
-          <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-        </Field>
-        <div className="flex items-end">
-          <Button type="submit">Invite to portal</Button>
-        </div>
-      </form>
     </div>
   );
 }
 
-const destinationKinds = ["lygo_managed", "s3_compatible", "azure_blob", "gcs", "sftp", "webhook_push"];
-const artefacts = ["originals", "ocr_text", "embeddings", "reports", "chat_logs"];
-
 export function StorageScreen() {
+  const allowed = usePermission("storage.manage");
   const { firmId } = useFirmId();
-  const destinations = useDestinations(firmId);
-  const policy = useStoragePolicy(firmId);
-  const rows = collect(destinations);
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState("s3_compatible");
-  const [region, setRegion] = useState("KE");
-  const [label, setLabel] = useState("");
-  const [draft, setDraft] = useState<StoragePolicy>({ artefacts: {}, residency_confirmed: false });
-  const [jobId, setJobId] = useState<string | null>(null);
-  const job = useJob(jobId);
-  useEffect(() => {
-    if (policy.data) setDraft(policy.data);
-  }, [policy.data]);
-
-  const create = useMutation({
-    mutationFn: () => api(apiPaths.storageDestinations(firmId), { method: "POST", body: { kind, region_country: region, label } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "storage-destinations"] }),
+  const destinations = useDestinations(firmId, allowed);
+  const [form, setForm] = useState({
+    name: "",
+    region_country: "KE",
+    transfer_basis: "",
+    bucket: "",
+    endpoint_url: "",
+    region: "us-east-1",
+    prefix: "",
+    access_key: "",
+    secret_key: "",
   });
-  const savePolicy = useMutation({
-    mutationFn: () => api(apiPaths.storagePolicy(firmId), { method: "PUT", body: draft }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "storage-policy"] }),
+  const [message, setMessage] = useState<string | null>(null);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "storage"] });
+  const create = useMutation({
+    mutationFn: () =>
+      api(apiPaths.storageDestinations(firmId), {
+        method: "POST",
+        body: {
+          ...form,
+          endpoint_url: form.endpoint_url || null,
+          region_country: form.region_country.toUpperCase(),
+        },
+      }),
+    onSuccess: () => {
+      setMessage("Storage destination saved. Test it before you make it primary.");
+      setForm({ ...form, access_key: "", secret_key: "", name: "", bucket: "" });
+      refresh();
+    },
+    onError: (error) => setMessage(errorText(error)),
   });
   const test = useMutation({
     mutationFn: (id: string) => api(apiPaths.storageTest(firmId, id), { method: "POST", body: {} }),
+    onSuccess: () => refresh(),
+    onError: (error) => setMessage(errorText(error)),
   });
-  const exportJob = useMutation({
-    mutationFn: async () => {
-      const result = await api<unknown>(apiPaths.exports(firmId), { method: "POST", body: { scope: "full" } });
-      if (isAcceptedJob(result)) setJobId(result.job_id);
-      return result;
-    },
+  const primary = useMutation({
+    mutationFn: (id: string) => api(apiPaths.storagePrimary(firmId), { method: "PUT", body: { destination_id: id } }),
+    onSuccess: () => refresh(),
+    onError: (error) => setMessage(errorText(error)),
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api(apiPaths.storageDestination(firmId, id), { method: "DELETE" }),
+    onSuccess: () => refresh(),
+    onError: (error) => setMessage(errorText(error)),
   });
 
+  if (!allowed) {
+    return <EmptyState title="You don't have access" body="Only the firm owner can change where files are stored." />;
+  }
+
   return (
-    <div className="space-y-6">
-      <PageHeader title="Storage" lede="Where originals, text, embeddings, and reports live. Credentials are write-only." />
-      <form
-        className="grid gap-3 md:grid-cols-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          create.mutate();
-        }}
-      >
-        <Field label="Kind">
-          <Select value={kind} onChange={(event) => setKind(event.target.value)}>
-            {destinationKinds.map((item) => (
-              <option key={item} value={item}>
-                {item.replaceAll("_", " ")}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Country">
-          <TextInput value={region} onChange={(event) => setRegion(event.target.value)} />
-        </Field>
-        <Field label="Label">
-          <TextInput value={label} onChange={(event) => setLabel(event.target.value)} />
-        </Field>
-        <div className="flex items-end">
-          <Button type="submit">Add destination</Button>
-        </div>
-      </form>
-      <QueryState isLoading={destinations.isLoading} error={destinations.error} empty={{ when: rows.length === 0, title: "No destinations yet" }}>
-        <DataTable
-          rows={rows}
-          columns={[
-            { header: "Label", cell: (row: StorageDestination) => row.label || row.kind },
-            { header: "Kind", cell: (row: StorageDestination) => row.kind },
-            { header: "Region", cell: (row: StorageDestination) => row.region_country ?? "—" },
-            { header: "Health", cell: (row: StorageDestination) => row.health ?? "unknown" },
-            {
-              header: "",
-              cell: (row: StorageDestination) => (
-                <Button type="button" variant="quiet" onClick={() => test.mutate(row.id)}>
-                  Test
-                </Button>
-              ),
-            },
-          ]}
-        />
-      </QueryState>
-      <Card>
-        <h2 className="font-display text-xl">Policy</h2>
-        <Field label="Primary destination">
-          <Select
-            value={draft.primary_destination ?? ""}
-            onChange={(event) => setDraft({ ...draft, primary_destination: event.target.value })}
+      <div className="space-y-6">
+        <PageHeader title="Storage" lede="Documents are stored in a bucket the firm controls. A bucket outside Kenya needs a transfer basis." />
+        <Card>
+          <form
+            className="grid gap-3 md:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              create.mutate();
+            }}
           >
-            <option value="">Select</option>
-            {rows.map((row) => (
-              <option key={row.id} value={row.id}>
-                {row.label || row.kind}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="mt-3 space-y-2">
-          {artefacts.map((name) => (
-            <Field key={name} label={name.replaceAll("_", " ")}>
-              <Select
-                value={draft.artefacts?.[name]?.destination ?? ""}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    artefacts: { ...draft.artefacts, [name]: { ...draft.artefacts?.[name], destination: event.target.value } },
-                  })
-                }
-              >
-                <option value="">Select</option>
-                {rows.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.label || row.kind}
-                  </option>
-                ))}
-              </Select>
+            <Field label="Name">
+              <TextInput value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
             </Field>
-          ))}
-        </div>
-        <label className="mt-3 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={Boolean(draft.residency_confirmed)}
-            onChange={(event) => setDraft({ ...draft, residency_confirmed: event.target.checked })}
-          />
-          I confirm the legal basis for any destination outside Kenya.
-        </label>
-        <div className="mt-3 flex gap-2">
-          <Button type="button" onClick={() => savePolicy.mutate()}>
-            Save policy
-          </Button>
-          <Button type="button" variant="quiet" onClick={() => exportJob.mutate()}>
-            Export firm data
-          </Button>
-        </div>
-        {job.data ? <p className="mt-2 text-sm">{taskStatusLabel(job.data.status)}</p> : null}
-        {savePolicy.error ? <p className="text-sm text-critical">{errorText(savePolicy.error)}</p> : null}
-      </Card>
-    </div>
+            <Field label="Country of the bucket" hint="Two letters, for example KE.">
+              <TextInput value={form.region_country} maxLength={2} onChange={(event) => setForm({ ...form, region_country: event.target.value })} required />
+            </Field>
+            <Field label="Transfer basis" hint="Required when the bucket is outside Kenya.">
+              <TextInput value={form.transfer_basis} onChange={(event) => setForm({ ...form, transfer_basis: event.target.value })} />
+            </Field>
+            <Field label="Bucket">
+              <TextInput value={form.bucket} onChange={(event) => setForm({ ...form, bucket: event.target.value })} required />
+            </Field>
+            <Field label="Endpoint" hint="Leave blank for the default cloud endpoint.">
+              <TextInput value={form.endpoint_url} onChange={(event) => setForm({ ...form, endpoint_url: event.target.value })} />
+            </Field>
+            <Field label="Region code">
+              <TextInput value={form.region} onChange={(event) => setForm({ ...form, region: event.target.value })} />
+            </Field>
+            <Field label="Folder prefix">
+              <TextInput value={form.prefix} onChange={(event) => setForm({ ...form, prefix: event.target.value })} />
+            </Field>
+            <Field label="Access key">
+              <TextInput value={form.access_key} onChange={(event) => setForm({ ...form, access_key: event.target.value })} autoComplete="off" required />
+            </Field>
+            <Field label="Secret key">
+              <TextInput type="password" value={form.secret_key} onChange={(event) => setForm({ ...form, secret_key: event.target.value })} autoComplete="new-password" required />
+            </Field>
+            <div className="md:col-span-2">
+              <Button type="submit" disabled={create.isPending}>
+                Save destination
+              </Button>
+            </div>
+          </form>
+          {message ? <p className="mt-3 text-sm">{message}</p> : null}
+        </Card>
+        <QueryState isLoading={destinations.isLoading} error={destinations.error} empty={{ when: (destinations.data ?? []).length === 0, title: "No storage yet", body: "Add a bucket before uploading documents." }}>
+          <ul className="space-y-3">
+            {(destinations.data ?? []).map((destination) => (
+              <DestinationCard
+                key={destination.id}
+                destination={destination}
+                onTest={() => test.mutate(destination.id)}
+                onPrimary={() => primary.mutate(destination.id)}
+                onRemove={() => remove.mutate(destination.id)}
+              />
+            ))}
+          </ul>
+        </QueryState>
+      </div>
   );
 }
 
-export function AiScreen() {
-  const { firmId, firm } = useFirmId();
-  const [settings, setSettings] = useState<AiSettings>({});
-  const queryClient = useQueryClient();
-  useEffect(() => {
-    if (firm?.ai_settings) setSettings(firm.ai_settings);
-  }, [firm]);
-  const save = useMutation({
-    mutationFn: () => api(apiPaths.firm(firmId), { method: "PATCH", body: { ai_settings: settings } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId] }),
-  });
-  const features = settings.features ?? {};
+function DestinationCard({
+  destination,
+  onTest,
+  onPrimary,
+  onRemove,
+}: {
+  destination: StorageDestination;
+  onTest: () => void;
+  onPrimary: () => void;
+  onRemove: () => void;
+}) {
+  const config = Object.entries(destination.config ?? {}).filter(([key, value]) => typeof value === "string" && !/secret|key|password/i.test(key));
+  const health = typeof destination.health?.ok === "boolean" ? (destination.health.ok ? "Last test passed" : "Last test failed") : "Not tested yet";
   return (
-    <form
-      className="max-w-xl space-y-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save.mutate();
-      }}
-    >
-      <PageHeader title="AI settings" lede="What the assistant may do, and whether a client sees an answer before an advocate approves it." />
-      {["research", "drafting", "client_assistant"].map((feature) => (
-        <label key={feature} className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={Boolean(features[feature])}
-            onChange={(event) => setSettings({ ...settings, features: { ...features, [feature]: event.target.checked } })}
-          />
-          {feature.replaceAll("_", " ")}
-        </label>
-      ))}
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={Boolean(settings.client_assistant_enabled)}
-          onChange={(event) => setSettings({ ...settings, client_assistant_enabled: event.target.checked })}
-        />
-        Client assistant enabled
-      </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={Boolean(settings.approval_mode)}
-          onChange={(event) => setSettings({ ...settings, approval_mode: event.target.checked })}
-        />
-        Approval mode
-      </label>
-      <Field label="Reading level">
-        <Select value={settings.reading_level ?? "plain"} onChange={(event) => setSettings({ ...settings, reading_level: event.target.value })}>
-          <option value="plain">Plain</option>
-          <option value="standard">Standard</option>
-          <option value="professional">Professional</option>
-        </Select>
-      </Field>
-      <Field label="Firm instructions">
-        <TextArea rows={4} value={settings.firm_instructions ?? ""} onChange={(event) => setSettings({ ...settings, firm_instructions: event.target.value })} />
-      </Field>
-      <Button type="submit">Save</Button>
-      {save.error ? <p className="text-sm text-critical">{errorText(save.error)}</p> : null}
-    </form>
+    <li className="rounded-lygo border border-line bg-paper-raised p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display text-xl">{destination.name}</h3>
+          <p className="text-sm text-ink-soft">
+            {destination.region_country}
+            {destination.is_primary ? " · Primary" : ""} · {health}
+          </p>
+          {destination.transfer_basis ? <p className="text-sm">Transfer basis: {destination.transfer_basis}</p> : null}
+          {destination.last_tested_at ? <p className="text-sm text-ink-soft">Tested {formatWhen(destination.last_tested_at)}</p> : null}
+          {config.length > 0 ? (
+            <ul className="mt-2 text-sm text-ink-soft">
+              {config.map(([key, value]) => (
+                <li key={key}>
+                  {labelize(key)}: {String(value)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="quiet" onClick={onTest}>
+            Test
+          </Button>
+          <Button type="button" variant="quiet" onClick={onPrimary} disabled={destination.is_primary}>
+            Make primary
+          </Button>
+          <Button type="button" variant="ghost" onClick={onRemove}>
+            Remove
+          </Button>
+        </div>
+      </div>
+    </li>
   );
 }
 
-export function RulesScreen() {
+export function MessagesScreen() {
   const { firmId } = useFirmId();
-  const packs = useRulePacks(firmId);
-  const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [severity, setSeverity] = useState("warning");
-  const [guidance, setGuidance] = useState("");
-  const save = useMutation({
-    mutationFn: (next: RulePack[]) => api(apiPaths.rulePacks(firmId), { method: "PATCH", body: { packs: next } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "rule-packs"] }),
-  });
-  const add = useMutation({
-    mutationFn: () => api(apiPaths.rules(firmId), { method: "POST", body: { name, severity, guidance } }),
-    onSuccess: () => {
-      setName("");
-      setGuidance("");
-      queryClient.invalidateQueries({ queryKey: ["firm", firmId, "rule-packs"] });
-    },
-  });
+  const notes = useList<FirmNotification>(["firm", firmId, "notifications"], apiPaths.notifications(firmId));
+  const rows = collect(notes);
   return (
     <div className="space-y-6">
-      <PageHeader title="Rule packs" lede="Deterministic flags. Thresholds stay with the pack, and a new rule is posted on its own." />
-      <QueryState isLoading={packs.isLoading} error={packs.error} empty={{ when: (packs.data ?? []).length === 0, title: "No rule packs yet" }}>
-        <div className="space-y-3">
-          {(packs.data ?? []).map((pack) => (
-            <Card key={pack.id}>
-              <label className="flex items-center gap-2 font-semibold">
-                <input
-                  type="checkbox"
-                  checked={pack.enabled !== false}
-                  onChange={(event) =>
-                    save.mutate((packs.data ?? []).map((item) => (item.id === pack.id ? { ...item, enabled: event.target.checked } : item)))
-                  }
-                />
-                {pack.name}
-              </label>
-              {pack.rules?.length ? (
-                <ul className="mt-2 text-sm text-ink-soft">
-                  {pack.rules.map((rule) => (
-                    <li key={rule.id ?? rule.name}>{rule.name}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </Card>
+      <PageHeader title="Messages" lede="Texts and emails Lygo has sent for this firm. Phone numbers are shortened." />
+      <QueryState isLoading={notes.isLoading} error={notes.error} empty={{ when: rows.length === 0, title: "No messages yet" }}>
+        <ul className="space-y-3">
+          {rows.map((note) => (
+            <li key={note.id} className="rounded-lygo border border-line bg-paper-raised p-4 text-sm">
+              <p className="font-medium">{labelize(note.template)}</p>
+              <p className="text-ink-soft">
+                To {note.to_masked} · {workStatusLabel(note.status)} · {formatWhen(note.created_at)}
+              </p>
+              {note.sent_at ? <p>Sent {formatWhen(note.sent_at)}</p> : null}
+              {note.delivered_at ? <p>Delivered {formatWhen(note.delivered_at)}</p> : null}
+              {note.error ? <p className="text-critical">{note.error}</p> : null}
+            </li>
           ))}
-        </div>
+        </ul>
+        <LoadMore hasNextPage={Boolean(notes.hasNextPage)} isFetchingNextPage={notes.isFetchingNextPage} onClick={() => notes.fetchNextPage()} />
       </QueryState>
-      <form
-        className="grid gap-3 md:grid-cols-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          add.mutate();
-        }}
-      >
-        <Field label="Rule name">
-          <TextInput value={name} onChange={(event) => setName(event.target.value)} required />
-        </Field>
-        <Field label="Severity">
-          <Select value={severity} onChange={(event) => setSeverity(event.target.value)}>
-            <option value="info">info</option>
-            <option value="caution">caution</option>
-            <option value="warning">warning</option>
-            <option value="critical">critical</option>
-          </Select>
-        </Field>
-        <Field label="Guidance">
-          <TextInput value={guidance} onChange={(event) => setGuidance(event.target.value)} />
-        </Field>
-        <Button type="submit">Add rule</Button>
-      </form>
     </div>
   );
 }
 
 export function BrandingScreen() {
   const { firmId, firm } = useFirmId();
-  const [branding, setBranding] = useState<Branding>({});
-  const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  useEffect(() => {
-    if (firm?.branding) setBranding(firm.branding);
-  }, [firm]);
+  const current = firm?.branding ?? {};
+  const [branding, setBranding] = useState<Branding>({});
+  const merged = { ...current, ...branding };
+  const contrast = merged.brand && merged.brand_foreground ? meetsAa(merged.brand_foreground, merged.brand) : true;
   const save = useMutation({
-    mutationFn: () => api(apiPaths.firm(firmId), { method: "PATCH", body: { branding } }),
+    mutationFn: () => api(apiPaths.firm(firmId), { method: "PATCH", body: { branding: merged } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId] }),
-    onError: (caught) => setError(errorText(caught)),
   });
+
   return (
-    <form
-      className="max-w-xl space-y-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const background = branding.brand || "#0e3b34";
-        const foreground = branding.brand_foreground || "#f6f1e6";
-        if (!meetsAa(foreground, background)) {
-          setError("Brand colours need a contrast ratio of at least 4.5:1.");
-          return;
-        }
-        setError(null);
-        save.mutate();
-      }}
-    >
-      <PageHeader title="Branding" lede="Logo, colours, portal domain, and the name used on email and SMS." />
-      <Field label="Logo URL">
-        <TextInput value={branding.logo_url ?? ""} onChange={(event) => setBranding({ ...branding, logo_url: event.target.value })} />
-      </Field>
-      <Field label="Brand">
-        <TextInput value={branding.brand ?? ""} onChange={(event) => setBranding({ ...branding, brand: event.target.value })} placeholder="#0e3b34" />
-      </Field>
-      <Field label="Brand foreground">
-        <TextInput value={branding.brand_foreground ?? ""} onChange={(event) => setBranding({ ...branding, brand_foreground: event.target.value })} placeholder="#f6f1e6" />
-      </Field>
-      <Field label="Portal domain">
-        <TextInput value={branding.portal_domain ?? ""} onChange={(event) => setBranding({ ...branding, portal_domain: event.target.value })} />
-      </Field>
-      <Field label="Sender name">
-        <TextInput value={branding.sender_name ?? ""} onChange={(event) => setBranding({ ...branding, sender_name: event.target.value })} />
-      </Field>
-      {error ? <p className="text-sm text-critical">{error}</p> : null}
-      <Button type="submit">Save branding</Button>
-    </form>
+    <div className="space-y-6">
+      <PageHeader title="Branding" lede="These colours and the sender name appear in the portal and in messages from the firm." />
+      <Card>
+        <form
+          className="grid gap-3 md:grid-cols-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (contrast) save.mutate();
+          }}
+        >
+          <Field label="Sender name">
+            <TextInput value={merged.sender_name ?? ""} onChange={(event) => setBranding({ ...branding, sender_name: event.target.value })} />
+          </Field>
+          <Field label="Logo address">
+            <TextInput value={merged.logo_url ?? ""} onChange={(event) => setBranding({ ...branding, logo_url: event.target.value })} />
+          </Field>
+          <Field label="Brand colour">
+            <TextInput value={merged.brand ?? ""} onChange={(event) => setBranding({ ...branding, brand: event.target.value })} placeholder="#1f4d3a" />
+          </Field>
+          <Field label="Text on the brand colour">
+            <TextInput value={merged.brand_foreground ?? ""} onChange={(event) => setBranding({ ...branding, brand_foreground: event.target.value })} placeholder="#ffffff" />
+          </Field>
+          {!contrast ? <p className="text-sm text-critical md:col-span-2">Those two colours are too close. Pick a darker and a lighter pair.</p> : null}
+          <div>
+            <Button type="submit" disabled={save.isPending || !contrast}>
+              Save branding
+            </Button>
+          </div>
+        </form>
+        {save.error ? <p className="mt-2 text-sm text-critical">{errorText(save.error)}</p> : null}
+      </Card>
+    </div>
   );
 }
 
-export function AuditScreen() {
-  const { firmId } = useFirmId();
-  const audit = useAudit(firmId);
-  const rows = collect(audit);
+function Unavailable({ title, body }: { title: string; body: string }) {
+  const { slug } = useFirmId();
   return (
-    <div className="space-y-4">
-      <PageHeader title="Audit log" />
-      <QueryState isLoading={audit.isLoading} error={audit.error} empty={{ when: rows.length === 0, title: "No audit events" }}>
-        <DataTable
-          rows={rows}
-          columns={[
-            { header: "When", cell: (row) => formatWhen(row.at) },
-            { header: "Action", cell: (row) => row.action },
-            { header: "Actor", cell: (row) => row.actor_id ?? "—" },
-            { header: "Target", cell: (row) => row.target ?? "—" },
-          ]}
-        />
-        <LoadMore hasNextPage={audit.hasNextPage} isFetchingNextPage={audit.isFetchingNextPage} onClick={() => audit.fetchNextPage()} />
+    <EmptyState
+      title={title}
+      body={body}
+      action={
+        <Link href={`/f/${slug}/control-center`} className="underline">
+          Back to the overview
+        </Link>
+      }
+    />
+  );
+}
+
+type AiSettings = {
+  client_chatbot_enabled: boolean;
+  require_approval_for_client: boolean;
+  reading_level: "simple" | "standard" | "technical";
+  firm_prompt: string;
+};
+
+export function AiScreen() {
+  const { firmId } = useFirmId();
+  const queryClient = useQueryClient();
+  const settings = useResource<AiSettings>(["firm", firmId, "ai-settings"], apiPaths.aiSettings(firmId));
+  const [draft, setDraft] = useState<AiSettings | null>(null);
+  const current = draft ?? settings.data ?? null;
+  const save = useMutation({
+    mutationFn: () => api(apiPaths.aiSettings(firmId), { method: "PATCH", body: current }),
+    onSuccess: () => {
+      setDraft(null);
+      void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "ai-settings"] });
+    },
+  });
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Assistant settings" lede="The client assistant stays off until you turn it on. Client answers can wait for an advocate before anyone outside the firm sees them." />
+      <QueryState isLoading={settings.isLoading} error={settings.error}>
+        {current ? (
+          <Card>
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                save.mutate();
+              }}
+            >
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={current.client_chatbot_enabled} onChange={(event) => setDraft({ ...current, client_chatbot_enabled: event.target.checked })} />
+                Let clients ask the assistant
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={current.require_approval_for_client} onChange={(event) => setDraft({ ...current, require_approval_for_client: event.target.checked })} />
+                An advocate reviews client answers before they are shown
+              </label>
+              <Field label="Reading level">
+                <Select value={current.reading_level} onChange={(event) => setDraft({ ...current, reading_level: event.target.value as AiSettings["reading_level"] })}>
+                  <option value="simple">Plain language</option>
+                  <option value="standard">Standard</option>
+                  <option value="technical">Technical</option>
+                </Select>
+              </Field>
+              <Field label="Style notes" hint="These notes cannot override the safety rules.">
+                <TextArea rows={4} value={current.firm_prompt} onChange={(event) => setDraft({ ...current, firm_prompt: event.target.value })} />
+              </Field>
+              <Button type="submit" disabled={save.isPending}>
+                Save
+              </Button>
+              {save.error ? <p className="text-sm text-critical">{errorText(save.error)}</p> : null}
+            </form>
+          </Card>
+        ) : null}
       </QueryState>
     </div>
+  );
+}
+
+export function RulesScreen() {
+  return <Unavailable title="Rules run while a document is read" body="The result of those checks appears on the document, under Checks." />;
+}
+
+export function AuditScreen() {
+  const { slug } = useFirmId();
+  return (
+    <EmptyState
+      title="Activity is recorded with each change"
+      body="A full activity list is not on this screen. Message delivery is listed under Messages."
+      action={
+        <Link href={`/f/${slug}/control-center/messages`} className="underline">
+          Open messages
+        </Link>
+      }
+    />
   );
 }
 
 export function BillingScreen() {
-  const { firmId, firm } = useFirmId();
-  const usage = useResource<Record<string, unknown>>(["firm", firmId, "usage"], apiPaths.usage(firmId));
-  return (
-    <div className="space-y-4">
-      <PageHeader title="Billing" lede={firm?.plan ? `Plan ${firm.plan}` : "Usage for documents, AI, and SMS."} />
-      <QueryState isLoading={usage.isLoading} error={usage.error}>
-        <RecordView data={usage.data} />
-      </QueryState>
-    </div>
-  );
+  return <Unavailable title="Billing is not on this screen" body="The firm's plan is shown on the overview. Invoices are handled outside Lygo for now." />;
 }
 
-const webhookEvents = ["document.processed", "document.flagged", "matter.deadline_due", "report.ready", "export.completed"];
-
 export function DevelopersScreen() {
-  const { firmId } = useFirmId();
-  const keys = useApiKeys(firmId);
-  const hooks = useWebhooks(firmId);
-  const queryClient = useQueryClient();
-  const [label, setLabel] = useState("");
-  const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<string[]>(["document.processed"]);
-  const [created, setCreated] = useState<ApiKey | null>(null);
-  const makeKey = useMutation({
-    mutationFn: () => api<ApiKey>(apiPaths.apiKeys(firmId), { method: "POST", body: { label } }),
-    onSuccess: (key) => {
-      setCreated(key);
-      setLabel("");
-      queryClient.invalidateQueries({ queryKey: ["firm", firmId, "api-keys"] });
-    },
-  });
-  const makeHook = useMutation({
-    mutationFn: () => api(apiPaths.webhooks(firmId), { method: "POST", body: { url, events } }),
-    onSuccess: () => {
-      setUrl("");
-      queryClient.invalidateQueries({ queryKey: ["firm", firmId, "webhooks"] });
-    },
-  });
-  return (
-    <div className="space-y-8">
-      <PageHeader title="Developers" lede="API keys and signed outbound webhooks. A new key secret is shown once." />
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          makeKey.mutate();
-        }}
-      >
-        <Field label="Key label">
-          <TextInput value={label} onChange={(event) => setLabel(event.target.value)} required />
-        </Field>
-        <Button type="submit">Create key</Button>
-      </form>
-      {created?.secret ? (
-        <p role="status" className="rounded-lygo border border-line bg-paper-raised p-3 text-sm">
-          Copy this secret now. It will not be shown again.
-          <span className="mt-1 block font-mono">{created.secret}</span>
-        </p>
-      ) : null}
-      <QueryState isLoading={keys.isLoading} error={keys.error} empty={{ when: collect(keys).length === 0, title: "No API keys" }}>
-        <DataTable
-          rows={collect(keys)}
-          columns={[
-            { header: "Label", cell: (row) => row.label ?? row.id },
-            { header: "Prefix", cell: (row) => row.prefix ?? "—" },
-            { header: "Created", cell: (row) => formatWhen(row.created_at) },
-          ]}
-        />
-      </QueryState>
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          makeHook.mutate();
-        }}
-      >
-        <Field label="Webhook URL">
-          <TextInput type="url" value={url} onChange={(event) => setUrl(event.target.value)} required />
-        </Field>
-        <fieldset>
-          <legend className="text-sm font-medium">Events</legend>
-          <div className="mt-2 flex flex-col gap-1">
-            {webhookEvents.map((eventName) => (
-              <label key={eventName} className="text-sm">
-                <input
-                  type="checkbox"
-                  className="mr-2"
-                  checked={events.includes(eventName)}
-                  onChange={(event) =>
-                    setEvents((current) => (event.target.checked ? [...current, eventName] : current.filter((item) => item !== eventName)))
-                  }
-                />
-                {eventName}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <Button type="submit">Add webhook</Button>
-      </form>
-      <QueryState isLoading={hooks.isLoading} error={hooks.error} empty={{ when: collect(hooks).length === 0, title: "No webhooks" }}>
-        <DataTable
-          rows={collect(hooks)}
-          columns={[
-            { header: "URL", cell: (row) => row.url },
-            { header: "Events", cell: (row) => (row.events ?? []).join(", ") },
-            { header: "Status", cell: (row) => row.status ?? "—" },
-          ]}
-        />
-      </QueryState>
-    </div>
-  );
+  return <Unavailable title="Keys and webhooks are not on this screen" body="The firm works through these pages. A key for outside software is not available yet." />;
 }

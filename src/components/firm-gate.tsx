@@ -4,44 +4,52 @@ import Link from "next/link";
 import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useFirm, useMe, useMemberships } from "@/features/queries";
-import { ADMIN_ROLES, homeFor, pickAnyMembership, pickMembership, surfaceFromPath, type Surface } from "@/lib/auth/routing";
-import type { Role } from "@/lib/api/types";
+import { ADMIN_ROLES, can, homeFor, pickAnyMembership, pickMembership, surfaceFromPath, type Surface } from "@/lib/auth/routing";
+import type { Membership, Role } from "@/lib/api/types";
 import { TenantProvider } from "@/lib/tenancy/context";
 import { AppShell, type NavItem } from "@/components/shell";
 import { EmptyState, LoadingBlock, ProblemView } from "@/components/states";
 
-function navFor(slug: string, surface: Surface): NavItem[] {
+function navFor(slug: string, surface: Surface, membership: Membership): NavItem[] {
   const root = `/f/${slug}/${surface}`;
+  const allow = (permission: string) => can(membership, permission);
   if (surface === "portal") {
     return [
       { href: root, label: "Home", exact: true },
+      { href: `${root}/matters`, label: "Matters" },
       { href: `${root}/documents`, label: "Documents" },
-      { href: `${root}/assistant`, label: "Assistant" },
+      { href: `${root}/search`, label: "Search" },
+      ...(allow("ai.use") ? [{ href: `${root}/assistant`, label: "Assistant" }] : []),
       { href: `${root}/settings`, label: "Settings" },
     ];
   }
   if (surface === "control-center") {
     return [
       { href: root, label: "Overview", exact: true },
+      { href: `${root}/diary`, label: "Diary" },
       { href: `${root}/members`, label: "Members" },
       { href: `${root}/clients`, label: "Clients" },
-      { href: `${root}/storage`, label: "Storage" },
-      { href: `${root}/ai-settings`, label: "AI" },
-      { href: `${root}/rule-packs`, label: "Rules" },
+      ...(allow("storage.manage") ? [{ href: `${root}/storage`, label: "Storage" }] : []),
+      ...(allow("audit.read") ? [{ href: `${root}/messages`, label: "Messages" }] : []),
+      ...(allow("firm.manage") ? [{ href: `${root}/ai-settings`, label: "Assistant settings" }] : []),
       { href: `${root}/branding`, label: "Branding" },
-      { href: `${root}/audit`, label: "Audit" },
-      { href: `${root}/billing`, label: "Billing" },
-      { href: `${root}/developers`, label: "Developers" },
     ];
   }
   return [
     { href: root, label: "Home", exact: true },
     { href: `${root}/matters`, label: "Matters" },
+    { href: `${root}/diary`, label: "Diary" },
+    { href: `${root}/practice`, label: "Practice" },
+    { href: `${root}/tasks`, label: "Tasks" },
     { href: `${root}/clients`, label: "Clients" },
     { href: `${root}/knowledge`, label: "Knowledge" },
-    { href: `${root}/research`, label: "Research" },
-    { href: `${root}/review-queue`, label: "Review" },
-    { href: `${root}/reports`, label: "Reports" },
+    { href: `${root}/search`, label: "Search" },
+    ...(allow("research.run") ? [{ href: `${root}/research`, label: "Research" }] : []),
+    ...(allow("ai.use") ? [{ href: `${root}/assistant`, label: "Assistant" }] : []),
+    ...(allow("ai.approve") ? [{ href: `${root}/answers`, label: "Answers" }] : []),
+    ...(allow("compare.run") ? [{ href: `${root}/compare`, label: "Compare" }] : []),
+    ...(allow("documents.tag") ? [{ href: `${root}/review-queue`, label: "Review" }] : []),
+    ...(allow("entities.read") ? [{ href: `${root}/parties`, label: "Parties" }] : []),
   ];
 }
 
@@ -56,7 +64,7 @@ export function FirmGate({ firmSlug, children }: { firmSlug: string; children: R
   const router = useRouter();
   const me = useMe();
   const memberships = useMemberships();
-  const items = memberships.data?.items ?? [];
+  const items = memberships.data ?? [];
   const surface = surfaceFromPath(pathname);
   const staff = pickMembership(items, firmSlug, "workspace");
   const admin = pickMembership(items, firmSlug, "control-center");
@@ -110,10 +118,8 @@ export function FirmGate({ firmSlug, children }: { firmSlug: string; children: R
       <div style={style}>
         <AppShell
           title={titles[surface]}
-          subtitle={[firm.data?.name ?? membership.firm_name ?? firmSlug, firm.data?.region_pref ? `Region ${firm.data.region_pref}` : null]
-            .filter(Boolean)
-            .join(" · ")}
-          nav={navFor(firmSlug, surface)}
+          subtitle={[firm.data?.name ?? membership.firm_name ?? firmSlug, firm.data?.plan ? firm.data.plan : null].filter(Boolean).join(" · ")}
+          nav={navFor(firmSlug, surface, membership)}
           portal={surface === "portal"}
           footer={
             <Link href="/select-context" className="mt-4 block px-3 text-sm text-paper/80">
