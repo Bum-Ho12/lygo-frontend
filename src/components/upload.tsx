@@ -3,34 +3,42 @@
 import { useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api/browser";
-import type { Document, PresignResponse } from "@/lib/api/types";
-import { ApiError } from "@/lib/api/problem";
+import { apiForm } from "@/lib/api/browser";
+import type { DocumentRow } from "@/lib/api/types";
 import { errorText } from "@/components/states";
 
 export function UploadDropzone({
   firmId,
-  presignPath,
-  confirmPath,
+  uploadPath,
   matterId,
+  title,
+  tags,
   camera = false,
   onUploaded,
 }: {
   firmId: string;
-  presignPath: string;
-  confirmPath: string;
+  uploadPath: string;
   matterId?: string;
+  title?: string;
+  tags?: string;
   camera?: boolean;
-  onUploaded?: () => void;
+  onUploaded?: (document: DocumentRow) => void;
 }) {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const upload = useMutation({
-    mutationFn: (file: File) => uploadFile({ presignPath, confirmPath, file, matterId }),
-    onSuccess: async () => {
-      setMessage("Uploaded. Processing has started.");
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.set("file", file);
+      if (title?.trim()) form.set("title", title.trim());
+      if (tags?.trim()) form.set("tags", tags.trim());
+      if (matterId) form.set("matter_id", matterId);
+      return apiForm<DocumentRow>(uploadPath, form);
+    },
+    onSuccess: async (document) => {
+      setMessage(document.duplicate ? "That file is already in this firm." : "Uploaded. Lygo is reading it.");
       await queryClient.invalidateQueries({ queryKey: ["firm", firmId] });
-      onUploaded?.();
+      onUploaded?.(document);
     },
     onError: (error) => setMessage(errorText(error)),
   });
@@ -58,7 +66,7 @@ export function UploadDropzone({
       >
         <input {...getInputProps()} aria-label="Upload a document" />
         <p className="font-medium">{upload.isPending ? "Uploading…" : "Drop a document, or choose a file"}</p>
-        <p className="text-sm text-ink-soft">PDF, Word, CSV, or a scan. Files go straight to the firm’s storage.</p>
+        <p className="text-sm text-ink-soft">PDF, Word, CSV, or a photo of a paper document.</p>
       </div>
       {camera ? (
         <label className="block text-sm font-medium">
@@ -78,47 +86,4 @@ export function UploadDropzone({
       {message ? <p role="status">{message}</p> : null}
     </div>
   );
-}
-
-async function uploadFile({
-  presignPath,
-  confirmPath,
-  file,
-  matterId,
-}: {
-  presignPath: string;
-  confirmPath: string;
-  file: File;
-  matterId?: string;
-}) {
-  const presign = await api<PresignResponse>(presignPath, {
-    method: "POST",
-    body: {
-      filename: file.name,
-      content_type: file.type || "application/octet-stream",
-      size_bytes: file.size,
-      matter_id: matterId,
-    },
-  });
-  const stored = await fetch(presign.upload_url, {
-    method: presign.method ?? "PUT",
-    headers: presign.headers,
-    body: file,
-  });
-  if (!stored.ok) {
-    throw new ApiError({ type: "about:blank", title: "We couldn't save that file", status: stored.status || 502, code: "upload_failed" });
-  }
-  if (presign.document_id) return presign.document_id;
-  const created = await api<Document>(confirmPath, {
-    method: "POST",
-    body: {
-      storage_key: presign.storage_key,
-      filename: file.name,
-      content_type: file.type || "application/octet-stream",
-      size_bytes: file.size,
-      title: file.name,
-      matter_id: matterId,
-    },
-  });
-  return created.id;
 }

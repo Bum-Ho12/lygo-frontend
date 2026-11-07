@@ -9,14 +9,15 @@ import { EmptyState, LoadingBlock, ProblemView } from "@/components/states";
 
 const nav = [
   { href: "/platform/firms", label: "Firms" },
-  { href: "/platform/corpus", label: "Corpus" },
-  { href: "/platform/health", label: "Health" },
+  { href: "/platform/corpus", label: "Law library" },
+  { href: "/platform/library", label: "Look up" },
+  { href: "/platform/health", label: "Status" },
 ];
 
 export function PlatformGate({ children }: { children: ReactNode }) {
   const me = useMe();
   const memberships = useMemberships();
-  const items = memberships.data?.items ?? [];
+  const items = memberships.data ?? [];
 
   if (me.isLoading || memberships.isLoading) return <LoadingBlock label="Opening the console" />;
   if (me.error || memberships.error) {

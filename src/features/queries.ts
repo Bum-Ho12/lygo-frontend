@@ -4,33 +4,20 @@ import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { api, apiList } from "@/lib/api/browser";
 import { apiPaths, withCursor } from "@/lib/api/paths";
 import type {
-  AnalyticsOverview,
-  AuditEvent,
-  Chat,
   Client,
-  CorpusSource,
-  Deadline,
-  Document,
+  DocumentDetail,
+  DocumentRow,
+  ExtractedField,
   Firm,
   Flag,
   Matter,
-  MatterFact,
   Member,
   Membership,
-  Notification,
-  NotificationPreferences,
-  Page,
-  Report,
-  ReviewPage,
-  RulePack,
   StorageDestination,
-  StoragePolicy,
   User,
-  Webhook,
-  ApiKey,
-  Job,
 } from "@/lib/api/types";
 import { isDocumentInProgress } from "@/lib/api/types";
+import { loadMemberships } from "@/lib/auth/memberships";
 
 export function collect<T>(query: { data?: { pages: { items: T[] }[] } }): T[] {
   return query.data?.pages.flatMap((page) => page.items) ?? [];
@@ -59,22 +46,7 @@ export function useMe() {
 }
 
 export function useMemberships() {
-  return useQuery({
-    queryKey: ["me", "memberships"],
-    queryFn: () => apiList<Membership>(withCursor(apiPaths.memberships(), null, 100)),
-  });
-}
-
-export function useNotifications() {
-  return useQuery({
-    queryKey: ["me", "notifications"],
-    queryFn: () => apiList<Notification>(withCursor(apiPaths.notifications(), null, 20)),
-    refetchInterval: 30_000,
-  });
-}
-
-export function useNotificationPreferences() {
-  return useResource<NotificationPreferences>(["me", "notification-preferences"], apiPaths.notificationPreferences());
+  return useQuery({ queryKey: ["me", "memberships"], queryFn: loadMemberships });
 }
 
 export function useFirm(firmId: string | null) {
@@ -84,10 +56,10 @@ export function useFirm(firmId: string | null) {
 export function useDocument(firmId: string, documentId: string) {
   return useQuery({
     queryKey: ["firm", firmId, "documents", documentId],
-    queryFn: () => api<Document>(apiPaths.document(firmId, documentId)),
+    queryFn: () => api<DocumentDetail>(apiPaths.document(firmId, documentId)),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status && isDocumentInProgress(status) ? 3000 : false;
+      return status && isDocumentInProgress(status) ? 4000 : false;
     },
   });
 }
@@ -96,26 +68,27 @@ export function useFlags(firmId: string, documentId: string | null) {
   return useQuery({
     queryKey: ["firm", firmId, "documents", documentId, "flags"],
     enabled: Boolean(documentId),
-    queryFn: async () => {
-      const data = await api<Page<Flag> | Flag[]>(apiPaths.documentFlags(firmId, documentId as string));
-      return Array.isArray(data) ? data : data.items;
-    },
+    queryFn: () => api<Flag[]>(apiPaths.documentFlags(firmId, documentId as string)),
   });
 }
 
-export function useChat(firmId: string, chatId: string | null) {
-  return useResource<Chat>(["firm", firmId, "chats", chatId], chatId ? apiPaths.chat(firmId, chatId) : null);
+export function useFields(firmId: string, documentId: string | null) {
+  return useQuery({
+    queryKey: ["firm", firmId, "documents", documentId, "fields"],
+    enabled: Boolean(documentId),
+    queryFn: () => api<ExtractedField[]>(apiPaths.documentFields(firmId, documentId as string)),
+  });
 }
 
-export function useJob(jobId: string | null) {
+export function useMembers(firmId: string) {
+  return useList<Member>(["firm", firmId, "members"], apiPaths.members(firmId));
+}
+
+export function useDestinations(firmId: string, enabled = true) {
   return useQuery({
-    queryKey: ["jobs", jobId],
-    enabled: Boolean(jobId),
-    queryFn: () => api<Job>(apiPaths.job(jobId as string)),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "queued" || status === "running" ? 2000 : false;
-    },
+    queryKey: ["firm", firmId, "storage"],
+    enabled: Boolean(firmId) && enabled,
+    queryFn: () => api<StorageDestination[]>(apiPaths.storageDestinations(firmId)),
   });
 }
 
@@ -140,96 +113,4 @@ export function useFirmMatters(firmId: string) {
   return { clients, clientItems, matters, isLoading, error };
 }
 
-export function useAnalytics(firmId: string) {
-  return useResource<AnalyticsOverview>(["firm", firmId, "analytics"], apiPaths.analytics(firmId));
-}
-
-export function useMembers(firmId: string) {
-  return useList<Member>(["firm", firmId, "members"], apiPaths.members(firmId));
-}
-
-export function useAudit(firmId: string) {
-  return useList<AuditEvent>(["firm", firmId, "audit"], apiPaths.audit(firmId));
-}
-
-export function useReports(firmId: string) {
-  return useList<Report>(["firm", firmId, "reports"], apiPaths.reports(firmId));
-}
-
-export function useDestinations(firmId: string) {
-  return useList<StorageDestination>(["firm", firmId, "storage-destinations"], apiPaths.storageDestinations(firmId));
-}
-
-export function useStoragePolicy(firmId: string) {
-  return useResource<StoragePolicy>(["firm", firmId, "storage-policy"], apiPaths.storagePolicy(firmId));
-}
-
-export function useRulePacks(firmId: string) {
-  return useQuery({
-    queryKey: ["firm", firmId, "rule-packs"],
-    queryFn: async () => {
-      const data = await api<Page<RulePack> | RulePack[] | { packs?: RulePack[] }>(apiPaths.rulePacks(firmId));
-      if (Array.isArray(data)) return data;
-      if ("items" in data && Array.isArray(data.items)) return data.items;
-      if ("packs" in data && Array.isArray(data.packs)) return data.packs;
-      return [];
-    },
-  });
-}
-
-export function useReviewQueue(firmId: string) {
-  return useQuery({
-    queryKey: ["firm", firmId, "review-queue"],
-    queryFn: async () => {
-      const data = await api<Page<ReviewPage> | ReviewPage[]>(apiPaths.reviewQueue(firmId));
-      return Array.isArray(data) ? data : data.items;
-    },
-  });
-}
-
-export function useDeadlines(firmId: string, matterId: string) {
-  return useQuery({
-    queryKey: ["firm", firmId, "matters", matterId, "deadlines"],
-    queryFn: async () => {
-      const data = await api<Page<Deadline> | Deadline[]>(apiPaths.deadlines(firmId, matterId));
-      return Array.isArray(data) ? data : data.items;
-    },
-  });
-}
-
-export function useFacts(firmId: string, matterId: string) {
-  return useQuery({
-    queryKey: ["firm", firmId, "matters", matterId, "facts"],
-    queryFn: async () => {
-      const data = await api<Page<MatterFact> | MatterFact[]>(apiPaths.facts(firmId, matterId));
-      return Array.isArray(data) ? data : data.items;
-    },
-  });
-}
-
-export function useKnowledge(firmId: string) {
-  return useList<Document>(["firm", firmId, "knowledge"], apiPaths.knowledgeDocuments(firmId));
-}
-
-export function useClientDocuments(firmId: string, clientId: string | null, matterId?: string) {
-  const path = clientId
-    ? `${apiPaths.clientDocuments(firmId, clientId)}${matterId ? `?matter_id=${encodeURIComponent(matterId)}` : ""}`
-    : null;
-  return useList<Document>(["firm", firmId, "client", clientId, "documents", matterId ?? "all"], path);
-}
-
-export function useApiKeys(firmId: string) {
-  return useList<ApiKey>(["firm", firmId, "api-keys"], apiPaths.apiKeys(firmId));
-}
-
-export function useWebhooks(firmId: string) {
-  return useList<Webhook>(["firm", firmId, "webhooks"], apiPaths.webhooks(firmId));
-}
-
-export function usePlatformFirms() {
-  return useList<Firm>(["platform", "firms"], apiPaths.platformFirms());
-}
-
-export function useCorpusSources() {
-  return useList<CorpusSource>(["platform", "corpus"], apiPaths.corpusSources());
-}
+export type { Membership, DocumentRow };

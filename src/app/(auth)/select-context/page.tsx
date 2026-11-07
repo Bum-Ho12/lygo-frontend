@@ -7,7 +7,7 @@ import { LoadingBlock, ProblemView } from "@/components/states";
 
 export default function SelectContextPage() {
   const memberships = useMemberships();
-  const items = memberships.data?.items ?? [];
+  const items = memberships.data ?? [];
 
   return (
     <div className="space-y-4">
@@ -15,6 +15,9 @@ export default function SelectContextPage() {
       <p className="text-sm text-ink-soft">You can belong to more than one firm, or be a client of more than one.</p>
       {memberships.isLoading ? <LoadingBlock /> : null}
       {memberships.error ? <ProblemView error={memberships.error} /> : null}
+      {!memberships.isLoading && !memberships.error && items.length === 0 ? (
+        <p className="text-sm text-ink-soft">You are not in a firm yet. Ask an owner to invite you, or wait for the invitation email.</p>
+      ) : null}
       <ul className="space-y-2">
         {items.map((item, index) => (
           <li key={`${item.kind}-${item.firm_id}-${item.client_id}-${index}`}>

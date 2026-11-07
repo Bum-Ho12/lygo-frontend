@@ -16,22 +16,7 @@ export function readCsrf(): string {
   return row ? decodeURIComponent(row.slice("lygo_csrf=".length)) : "";
 }
 
-export async function api<T>(path: string, init: ApiInit = {}): Promise<T> {
-  const method = (init.method ?? (init.body !== undefined ? "POST" : "GET")).toUpperCase();
-  const headers: Record<string, string> = { Accept: "application/json", ...init.headers };
-  if (init.body !== undefined) headers["Content-Type"] = "application/json";
-  if (method !== "GET" && method !== "HEAD") {
-    headers["X-CSRF-Token"] = readCsrf();
-    if (method === "POST" && init.idempotent !== false) headers["Idempotency-Key"] = crypto.randomUUID();
-  }
-
-  const res = await fetch(`/api/v1${path}`, {
-    method,
-    headers,
-    credentials: "same-origin",
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-  });
-
+async function finish<T>(res: Response): Promise<T> {
   if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
     const next = `${window.location.pathname}${window.location.search}`;
     window.location.assign(`/login?next=${encodeURIComponent(next)}`);
@@ -49,6 +34,38 @@ export async function api<T>(path: string, init: ApiInit = {}): Promise<T> {
   }
   if (!res.ok) throw new ApiError(toProblem(res.status, data));
   return data as T;
+}
+
+export async function api<T>(path: string, init: ApiInit = {}): Promise<T> {
+  const method = (init.method ?? (init.body !== undefined ? "POST" : "GET")).toUpperCase();
+  const headers: Record<string, string> = { Accept: "application/json", ...init.headers };
+  if (init.body !== undefined) headers["Content-Type"] = "application/json";
+  if (method !== "GET" && method !== "HEAD") {
+    headers["X-CSRF-Token"] = readCsrf();
+    if (method === "POST" && init.idempotent !== false) headers["Idempotency-Key"] = crypto.randomUUID();
+  }
+
+  const res = await fetch(`/api/v1${path}`, {
+    method,
+    headers,
+    credentials: "same-origin",
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  return finish(res);
+}
+
+export async function apiForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`/api/v1${path}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "X-CSRF-Token": readCsrf(),
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    credentials: "same-origin",
+    body: form,
+  });
+  return finish(res);
 }
 
 export async function apiList<T>(path: string): Promise<Page<T>> {

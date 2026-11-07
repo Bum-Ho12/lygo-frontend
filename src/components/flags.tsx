@@ -1,5 +1,5 @@
 import type { Severity } from "@/lib/api/types";
-import { documentStatusLabel } from "@/lib/format";
+import { documentStatusLabel, formatWhen } from "@/lib/format";
 
 const tone: Record<string, string> = {
   info: "bg-info/10 text-info",
@@ -42,32 +42,30 @@ export function FlagBadge({ severity }: { severity: Severity | string }) {
   );
 }
 
-const steps = ["received", "stored", "ocr", "parsing", "classifying", "flagging", "chunking", "embedding", "indexed"];
-
 export function ProcessingTimeline({
   status,
-  timeline,
+  events,
 }: {
   status: string;
-  timeline?: { status: string; at?: string; detail?: string }[];
+  events: { stage: string; status: string; at?: string }[];
 }) {
-  const events: { status: string; at?: string; detail?: string }[] =
-    timeline && timeline.length > 0 ? timeline : steps.map((step) => ({ status: step }));
-  const current = steps.indexOf(status);
+  if (events.length === 0) {
+    return <p className="text-sm text-ink-soft">{documentStatusLabel(status)}</p>;
+  }
   return (
     <ol className="space-y-2 text-sm">
       {events.map((event, index) => {
-        const stepIndex = steps.indexOf(event.status);
-        const done = status === "indexed" || (current >= 0 && stepIndex >= 0 && stepIndex <= current) || index === 0;
-        const failed = status === "failed" || status === "quarantined";
+        const failed = event.status === "error" || status === "failed";
+        const done = event.status === "ok" || event.status === "skipped";
         return (
-          <li key={`${event.status}-${index}`} className="flex items-start gap-2">
-            <span
-              className={`mt-1 h-2.5 w-2.5 rounded-full ${failed && event.status === status ? "bg-critical" : done ? "bg-ok" : "bg-line"}`}
-              aria-hidden="true"
-            />
+          <li key={`${event.stage}-${index}`} className="flex items-start gap-2">
+            <span className={`mt-1 h-2.5 w-2.5 rounded-full ${failed && event.status === "error" ? "bg-critical" : done ? "bg-ok" : "bg-line"}`} aria-hidden="true" />
             <span>
-              <span className="font-medium">{documentStatusLabel(event.status)}</span>
+              <span className="font-medium">{documentStatusLabel(event.stage)}</span>
+              <span className="block text-ink-soft">
+                {documentStatusLabel(event.status)}
+                {event.at ? ` · ${formatWhen(event.at)}` : ""}
+              </span>
             </span>
           </li>
         );

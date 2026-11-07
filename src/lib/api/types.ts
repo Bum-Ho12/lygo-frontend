@@ -16,16 +16,21 @@ export type Page<T> = {
 
 export type User = {
   id: string;
-  email: string | null;
-  phone: string | null;
+  email: string;
   name: string;
   locale: string;
 };
 
+export type MembershipDirectory = {
+  firms: { firm_id: string; role: string }[];
+  clients: { client_id: string; firm_id: string; role: string }[];
+};
+
+/** A membership after the firm record has been loaded, so routes can use the slug. */
 export type Membership = {
   kind: "platform" | "firm" | "client";
   role: Role;
-  status?: "active" | "invited" | "deactivated" | string;
+  status?: string;
   permissions?: string[];
   firm_id: string | null;
   firm_slug: string | null;
@@ -38,293 +43,226 @@ export type Branding = {
   logo_url?: string | null;
   brand?: string | null;
   brand_foreground?: string | null;
-  portal_domain?: string | null;
   sender_name?: string | null;
-};
-
-export type AiSettings = {
-  features?: Record<string, boolean>;
-  client_assistant_enabled?: boolean;
-  approval_mode?: boolean;
-  reading_level?: "plain" | "standard" | "professional" | string;
-  firm_instructions?: string;
-  show_flags_before_review?: boolean;
 };
 
 export type Firm = {
   id: string;
   slug: string;
   name: string;
-  plan?: string;
-  status?: string;
-  region_pref?: string;
-  branding?: Branding;
-  ai_settings?: AiSettings;
-  odpc_registered?: boolean;
-  dpa_signed?: boolean;
+  plan: string;
+  branding: Branding;
+};
+
+export type PlatformFirm = {
+  id: string;
+  slug: string;
+  name: string;
+  plan: string;
 };
 
 export type Member = {
   user_id: string;
-  email?: string | null;
-  name?: string | null;
-  role: Role | string;
-  status?: string;
-  mfa_enabled?: boolean;
+  role: string;
+  status: string;
+  email: string;
+  name: string;
 };
 
 export type Client = {
   id: string;
-  firm_id?: string;
-  type: "individual" | "business" | string;
   name: string;
-  status?: string;
-  sensitivity?: string;
+  type: string;
+  sensitivity: string;
 };
 
 export type Matter = {
   id: string;
-  firm_id?: string;
   client_id: string;
   title: string;
-  practice_area?: string | null;
-  status?: string;
-  assigned_user_ids?: string[];
-  opened_at?: string | null;
+  practice_area: string;
+  status: string;
+  assigned_user_ids: string[];
 };
 
 export type Deadline = {
   id: string;
-  matter_id?: string;
+  matter_id: string;
+  title: string;
+  kind: string;
   due_at: string;
-  kind?: string;
-  source_flag_id?: string | null;
-  title?: string;
+  status: string;
 };
 
-export type MatterFact = {
+export type Task = {
   id: string;
-  key: string;
-  value: unknown;
-  confirmed_by?: string | null;
+  title: string;
+  kind: string;
+  status: string;
+  matter_id: string | null;
+  client_id: string | null;
+  assignee_id: string | null;
+  due_at: string | null;
 };
 
-export type Severity = "info" | "caution" | "warning" | "critical";
+export type DocumentRow = {
+  id: string;
+  scope: string;
+  client_id: string | null;
+  matter_id: string | null;
+  title: string;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  status: string;
+  status_detail: string;
+  doc_type: string | null;
+  practice_area: string | null;
+  tags: string[];
+  sensitivity: string;
+  page_count: number;
+  shared_with_clients: boolean;
+  version_group_id: string;
+  version_no: number;
+  created_at: string;
+  duplicate: boolean;
+};
+
+export type IngestEvent = {
+  stage: string;
+  status: string;
+  detail: string;
+  at: string;
+};
+
+export type DocumentDetail = DocumentRow & {
+  events: IngestEvent[];
+  flag_counts: Record<string, number>;
+};
 
 export type Flag = {
   id: string;
-  document_id?: string;
-  rule_id?: string | null;
-  source?: "rule" | "ai" | string;
-  severity: Severity | string;
+  document_id: string;
+  rule_id: string;
+  severity: string;
   title: string;
   explanation: string;
-  span?: { page?: number; quote?: string; start?: number; end?: number };
-  status?: "open" | "acknowledged" | "dismissed" | "confirmed" | string;
-  law_ref?: string | null;
-};
-
-export type TimelineEvent = {
+  span: Record<string, unknown> | null;
+  extracted: Record<string, unknown>;
   status: string;
-  at?: string;
-  detail?: string;
+  resolution_note: string;
 };
 
-export type Document = {
+export type ExtractedField = {
+  kind: string;
+  key: string;
+  value: string;
+  section_path: string;
+};
+
+export type SearchHit = {
+  citation: {
+    chunk_id: string;
+    source_type: string;
+    source_id: string;
+    scope: string;
+    title: string;
+    section_ref: string;
+    page: number | null;
+    version: string;
+    effective_from: string | null;
+  };
+  text: string;
+  score: number;
+  vector_rank: number | null;
+  text_rank: number | null;
+};
+
+export type EntityHit = {
   id: string;
-  firm_id?: string;
-  client_id?: string | null;
-  matter_id?: string | null;
-  scope?: "firm_kb" | "client" | string;
-  doc_type?: string | null;
+  kind: string;
+  display_name: string;
+  mentions: number;
+  documents: string[];
+};
+
+export type Comparison = {
+  left_document_id: string;
+  right_document_id: string;
+  result: {
+    items: {
+      change: string;
+      left_path: string | null;
+      right_path: string | null;
+      left_number: string;
+      right_number: string;
+      heading: string;
+      similarity: number;
+      hints: string[];
+      diff: { op: string; left: string; right: string }[];
+    }[];
+    summary: {
+      unchanged: number;
+      modified: number;
+      added: number;
+      removed: number;
+      moved: number;
+      flagged: number;
+    };
+  };
+  field_diff: { kind: string; key: string; left: string[]; right: string[]; status: string }[];
+};
+
+export type ReviewItem = {
+  document_id: string;
+  page: number;
+  ocr_confidence: number | null;
   title: string;
-  status: string;
-  sensitivity?: "normal" | "sensitive" | string;
-  language?: string | null;
-  page_count?: number | null;
-  uploaded_by?: string | null;
-  sha256?: string | null;
-  tags?: string[];
-  share_with_clients?: boolean;
-  created_at?: string;
-  updated_at?: string;
-  timeline?: TimelineEvent[];
-  status_timeline?: TimelineEvent[];
-};
-
-export type ContentLink = {
-  url?: string;
-  presigned_url?: string;
-  expires_at?: string;
-};
-
-export type PresignResponse = {
-  upload_url: string;
-  method?: "PUT" | "POST";
-  headers?: Record<string, string>;
-  storage_key?: string;
-  document_id?: string;
-  expires_at?: string;
-};
-
-export type Citation = {
-  id?: string;
-  chunk_id?: string;
-  document_id?: string;
-  section_ref?: string;
-  label?: string;
-  quote?: string;
-  verified?: boolean;
-  source_type?: "public" | "firm_kb" | "client" | string;
-};
-
-export type ChatMessage = {
-  id: string;
-  role: "user" | "assistant" | "system" | string;
-  content: string;
-  citations?: Citation[];
-  approved_by?: string | null;
-  pending_review?: boolean;
-  created_at?: string;
-};
-
-export type Chat = {
-  id: string;
-  firm_id?: string;
-  client_id?: string | null;
-  matter_id?: string | null;
-  audience?: "advocate" | "client" | string;
-  messages?: ChatMessage[];
-};
-
-export type Report = {
-  id: string;
-  matter_id?: string | null;
-  type?: string;
-  format?: "pdf" | "docx" | "csv" | "json" | string;
-  status?: string;
-  download_url?: string | null;
-  created_at?: string;
-};
-
-export type Job = {
-  id: string;
-  status: "queued" | "running" | "succeeded" | "failed" | string;
-  progress?: number;
-  result?: unknown;
-  error?: string;
-};
-
-export type AcceptedJob = {
-  job_id: string;
 };
 
 export type StorageDestination = {
   id: string;
-  kind: string;
-  region_country?: string;
-  health?: string;
-  label?: string;
-};
-
-export type StoragePolicy = {
-  primary_destination?: string | null;
-  artefacts?: Record<string, { destination?: string; retain_in_lygo?: boolean; retention_days?: number }>;
-  exports?: { destination?: string; schedule?: string; include?: string[] }[];
-  residency_confirmed?: boolean;
-};
-
-export type RulePack = {
-  id: string;
   name: string;
-  enabled?: boolean;
-  thresholds?: Record<string, number>;
-  rules?: { id?: string; name?: string; severity?: string; guidance?: string }[];
+  kind: string;
+  region_country: string;
+  transfer_basis: string;
+  config: Record<string, unknown>;
+  is_primary: boolean;
+  health: Record<string, unknown>;
+  last_tested_at: string | null;
 };
 
-export type AuditEvent = {
+export type FirmNotification = {
   id: string;
-  actor_id?: string | null;
-  action: string;
-  target?: string | null;
-  ip?: string | null;
-  at?: string;
+  template: string;
+  to_masked: string;
+  status: string;
+  error: string;
+  created_at: string;
+  sent_at: string | null;
+  delivered_at: string | null;
 };
 
-export type Notification = {
-  id: string;
-  channel?: string;
-  template?: string;
-  status?: string;
-  title?: string;
-  body?: string;
-  created_at?: string;
-};
-
-export type NotificationPreferences = {
-  email_enabled?: boolean;
-  sms_enabled?: boolean;
-  quiet_hours?: boolean;
-  locale?: string;
-};
-
-export type ApiKey = {
-  id: string;
+/** Kept for the citation stream parser. Chat routes are not on the API yet. */
+export type Citation = {
   label?: string;
-  prefix?: string;
-  created_at?: string;
-  secret?: string;
-};
-
-export type Webhook = {
-  id: string;
-  url: string;
-  events?: string[];
-  status?: string;
-};
-
-export type CorpusSource = {
-  id: string;
+  verified?: boolean;
+  source_id?: string;
+  section_ref?: string;
+  marker?: number | string;
+  chunk_id?: string;
+  source_type?: string;
+  scope?: string;
   title?: string;
-  kind?: string;
-  licence?: string;
-  version_date?: string;
-  status?: string;
-  chunk_count?: number;
+  version?: string;
 };
 
-export type ReviewPage = {
-  id: string;
-  document_id: string;
-  document_title?: string;
-  page?: number;
-  n?: number;
-  text?: string;
-  ocr_confidence?: number;
-  image_url?: string | null;
-};
+export type Severity = "critical" | "warning" | "caution" | "info";
 
-export type AnalyticsOverview = {
-  matters?: { total?: number; open?: number };
-  flags_by_severity?: Partial<Record<Severity, number>>;
-  deadlines?: Deadline[];
-  workload?: { user_id?: string; name?: string; open_matters?: number }[];
-  review_queue_count?: number;
-  pending_approvals?: number;
-};
-
-export const DOCUMENT_TERMINAL = ["indexed", "failed", "quarantined"] as const;
+export const DOCUMENT_TERMINAL = ["processed", "needs_review", "failed"] as const;
 
 export function isDocumentInProgress(status: string): boolean {
   return !DOCUMENT_TERMINAL.includes(status as (typeof DOCUMENT_TERMINAL)[number]);
-}
-
-export function contentHref(link: ContentLink | null | undefined): string | null {
-  return link?.url ?? link?.presigned_url ?? null;
-}
-
-export function isAcceptedJob(value: unknown): value is AcceptedJob {
-  return Boolean(value && typeof value === "object" && "job_id" in value && typeof (value as AcceptedJob).job_id === "string");
 }
 
 export const SEVERITY_ORDER: Record<string, number> = {
@@ -341,5 +279,5 @@ export function sortFlags(flags: Flag[]): Flag[] {
 export function visibleFlags(flags: Flag[], audience: "client" | "advocate"): Flag[] {
   const sorted = sortFlags(flags);
   if (audience === "advocate") return sorted;
-  return sorted.filter((flag) => flag.source !== "ai" || flag.status === "confirmed");
+  return sorted.filter((flag) => flag.status !== "dismissed");
 }

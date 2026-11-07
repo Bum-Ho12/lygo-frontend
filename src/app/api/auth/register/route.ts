@@ -5,7 +5,7 @@ import { postAuth, tokenPair } from "@/lib/auth/upstream";
 
 export const runtime = "nodejs";
 
-const FIELDS = ["name", "email", "password", "phone", "invitation_token"] as const;
+const FIELDS = ["name", "email", "password"] as const;
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
