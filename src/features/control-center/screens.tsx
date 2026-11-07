@@ -493,7 +493,7 @@ export function StorageScreen() {
           <StorageOption
             title="Your own storage"
             badge={active ? "In use" : null}
-            body="A bucket your firm controls (AWS S3, MinIO, Wasabi or any S3-compatible service). If it can't be reached, new uploads go to Lygo storage until it's back."
+            body="A bucket your firm controls (AWS S3, MinIO, Wasabi or any S3-compatible service). Files never go anywhere else: if it can't be reached, uploads pause until it's back or you switch to Lygo storage."
           >
             {active ? (
               <p className="text-sm">
@@ -555,7 +555,7 @@ export function StorageScreen() {
               <Field label="Bucket">
                 <TextInput value={form.bucket} onChange={(event) => setForm({ ...form, bucket: event.target.value })} required />
               </Field>
-              <Field label="Endpoint" hint="Leave blank for AWS S3.">
+              <Field label="Endpoint" hint="Leave blank for AWS S3. Otherwise an https:// address on the public internet.">
                 <TextInput value={form.endpoint_url} onChange={(event) => setForm({ ...form, endpoint_url: event.target.value })} placeholder="https://" />
               </Field>
               <Field label="Region code">
