@@ -16,7 +16,15 @@ export default function SelectContextPage() {
       {memberships.isLoading ? <LoadingBlock /> : null}
       {memberships.error ? <ProblemView error={memberships.error} /> : null}
       {!memberships.isLoading && !memberships.error && items.length === 0 ? (
-        <p className="text-sm text-ink-soft">You are not in a firm yet. Ask an owner to invite you, or wait for the invitation email.</p>
+        <div className="space-y-3 text-sm text-ink-soft">
+          <p>You are not in a firm yet. If your firm uses Lygo, ask its owner to invite you, or wait for the invitation email.</p>
+          <p>
+            Setting up Lygo for your own firm?{" "}
+            <Link href="/firm-application" className="font-semibold text-ink underline">
+              Register your firm
+            </Link>
+          </p>
+        </div>
       ) : null}
       <ul className="space-y-2">
         {items.map((item, index) => (
