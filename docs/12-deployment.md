@@ -14,7 +14,7 @@
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `.github/workflows/ci.yml` | every PR, push to `main` | `pnpm lint` → `typecheck` → `test` → `build`, plus a Docker image build check |
+| `.github/workflows/ci.yml` | every PR, push to `main` | `pnpm lint` → `typecheck` → `test` → `build` |
 | `.github/workflows/deploy.yml` | push to `main`, manual | Builds the `Dockerfile`, pushes `ghcr.io/<repo>:<sha>` + `:latest`, calls the RumptyCloud deploy hook, then polls `/api/health` |
 
 One-time setup in GitHub → Settings → Secrets and variables → Actions:
