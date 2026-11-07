@@ -6,6 +6,13 @@ export const apiPaths = {
   memberships: () => "/me/memberships",
   acceptInvitation: () => "/invitations/accept",
   platformFirms: () => "/platform/firms",
+  signupInfo: () => "/firm-signup",
+  slugAvailability: (slug: string) => `/firm-signup/slug-availability?slug=${encodeURIComponent(slug)}`,
+  myFirmApplications: () => "/me/firm-applications",
+  withdrawFirmApplication: (applicationId: string) => `/me/firm-applications/${applicationId}:withdraw`,
+  platformApplications: (status: string) => `/platform/firm-applications?status=${encodeURIComponent(status)}`,
+  approveApplication: (applicationId: string) => `/platform/firm-applications/${applicationId}:approve`,
+  rejectApplication: (applicationId: string) => `/platform/firm-applications/${applicationId}:reject`,
   corpusDocuments: () => "/platform/corpus/documents",
   corpusSearch: (query: string, asAt?: string) => {
     const params = new URLSearchParams({ q: query });

@@ -19,7 +19,7 @@ function safePath(parts: string[]): string | null {
 
 function isPublic(method: string, parts: string[]): boolean {
   if (method !== "GET" && method !== "HEAD") return false;
-  return parts[0] === "health" || parts[0] === "corpus";
+  return parts[0] === "health" || parts[0] === "corpus" || (parts.length === 1 && parts[0] === "firm-signup");
 }
 
 function csrfOk(header: string | null, cookie: string | undefined): boolean {

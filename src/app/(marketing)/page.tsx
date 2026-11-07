@@ -17,6 +17,7 @@ export default function HomePage() {
       <header className="flex items-center justify-between px-6 py-5 md:px-10">
         <p className="font-display text-2xl">Lygo</p>
         <nav className="flex gap-4 text-sm">
+          <Link href="/register-firm">For firms</Link>
           <Link href="/login">Sign in</Link>
           <Link href="/register" className="rounded-lygo bg-brand px-3 py-2 font-semibold text-brand-foreground">
             Create account
@@ -33,6 +34,9 @@ export default function HomePage() {
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Link href="/login" className="rounded-lygo bg-ink px-4 py-2 font-semibold text-paper">
               Open Lygo
+            </Link>
+            <Link href="/register-firm" className="rounded-lygo border border-line bg-paper-raised px-4 py-2 font-semibold">
+              Register your firm
             </Link>
             <ApiStatus />
           </div>

@@ -20,7 +20,7 @@ const schema = z.object({
     .refine((value) => new Set(value).size >= 5, "Use a less repetitive password."),
 });
 
-export function RegisterForm({ invitationToken }: { invitationToken?: string }) {
+export function RegisterForm({ invitationToken, next }: { invitationToken?: string; next?: string | null }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -59,6 +59,7 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
         if (!login.ok) {
           setPending(false);
           setError("Your account is ready. Sign in to continue.");
+          if (next) router.push(`/login?next=${encodeURIComponent(next)}`);
           return;
         }
         try {
@@ -66,7 +67,7 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
             await api(apiPaths.acceptInvitation(), { method: "POST", body: { token: invitationToken } });
           }
           const memberships = await loadMemberships();
-          router.push(destinationFor(memberships, null));
+          router.push(destinationFor(memberships, next ?? null));
           router.refresh();
         } catch (err) {
           setPending(false);
@@ -98,7 +99,16 @@ export function RegisterForm({ invitationToken }: { invitationToken?: string }) 
         {pending ? "Saving…" : invitationToken ? "Join" : "Create account"}
       </Button>
       <p className="text-sm">
-        <Link href={invitationToken ? `/login?next=${encodeURIComponent(`/invite/${invitationToken}`)}` : "/login"} className="underline">
+        <Link
+          href={
+            invitationToken
+              ? `/login?next=${encodeURIComponent(`/invite/${invitationToken}`)}`
+              : next
+                ? `/login?next=${encodeURIComponent(next)}`
+                : "/login"
+          }
+          className="underline"
+        >
           I already have an account
         </Link>
       </p>

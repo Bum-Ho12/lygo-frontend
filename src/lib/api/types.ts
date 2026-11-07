@@ -54,6 +54,35 @@ export type Firm = {
   branding: Branding;
 };
 
+export type SignupMode = "review" | "auto" | "closed";
+export type SignupInfo = { mode: SignupMode; terms_version: string };
+export type SlugAvailability = { slug: string; available: boolean; reason: string };
+export type FirmApplicationStatus = "pending" | "approved" | "rejected" | "withdrawn";
+export type FirmSize = "solo" | "2-5" | "6-20" | "21+";
+
+export type FirmApplication = {
+  id: string;
+  firm_name: string;
+  slug: string;
+  practice_areas: string[];
+  lsk_admission_no: string | null;
+  town: string | null;
+  size: FirmSize;
+  status: FirmApplicationStatus;
+  /** The rejection reason (empty unless rejected). */
+  review_note: string;
+  firm_id: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+};
+
+export type FirmApplicationReview = FirmApplication & {
+  applicant_email: string;
+  applicant_name: string;
+  phone: string | null;
+  terms_version: string;
+};
+
 export type PlatformFirm = {
   id: string;
   slug: string;

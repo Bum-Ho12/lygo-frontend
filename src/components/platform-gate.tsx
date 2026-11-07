@@ -10,6 +10,7 @@ import { EmptyState, LoadingBlock, ProblemView } from "@/components/states";
 function platformNav(canManage: boolean) {
   return [
     { href: "/platform/firms", label: "Firms" },
+  { href: "/platform/applications", label: "Applications" },
     { href: "/platform/corpus", label: "Law library" },
     { href: "/platform/library", label: "Look up" },
     ...(canManage ? [{ href: "/platform/recovery", label: "Recovery" }] : []),

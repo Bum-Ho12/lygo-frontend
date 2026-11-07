@@ -4,6 +4,7 @@
 | Screen | Contents |
 |---|---|
 | Firms | List, plan, status, region, usage; create firm + invite owner |
+| Applications | Self-service firm sign-ups by status (pending/approved/rejected/withdrawn); applicant, phone, LSK no., practice areas, terms version; approve (optional address override + internal note) or reject (reason shown to the applicant) |
 | Firm detail | Metadata only (no content), plan limits, feature flags, support-session requests |
 | Corpus | Sources, versions, licence status, sync jobs, chunk counts |
 | Health | Queues, worker status, LLM error rates, storage destination failures |
@@ -43,3 +44,10 @@
 | Settings | Profile, phone (SMS), notification preferences, consents (incl. cross-border processing), data request |
 
 Mobile-first for the Client Portal: many clients will use a phone.
+
+## Firm sign-up (self-service)
+| Screen | Route | Contents |
+|---|---|---|
+| For firms | `/register-firm` (public) | What happens, in three steps; "Create an account" / "I already have an account" both continue to the application (`?next=/firm-application`); a closed notice when `mode=closed` |
+| Firm application | `/firm-application` (signed in) | Form: firm name, workspace address (derived from the name, live availability check, API's slug rules mirrored in `lib/slug.ts`), practice areas, LSK admission no., phone, town, size, terms + DPA acceptance with the version from `GET /firm-signup`. Then the latest application's status: under review (withdraw), approved ("Open your firm" → control centre), not approved (reason + apply again with the details pre-filled) |
+| Choose a context | `/select-context` | With no memberships, also links to "Register your firm" |

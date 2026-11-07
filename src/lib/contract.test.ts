@@ -48,6 +48,13 @@ describe("api paths", () => {
     expect(apiPaths.resetLink()).toBe("/platform/users/reset-link");
     expect(apiPaths.corpusSection("doc", "s.12")).toBe("/corpus/documents/doc/sections/s.12");
     expect(apiPaths.corpusSection("doc", "s.12 (1)")).toBe("/corpus/documents/doc/sections/s.12%20(1)");
+    expect(apiPaths.signupInfo()).toBe("/firm-signup");
+    expect(apiPaths.slugAvailability("muthoni & co")).toBe("/firm-signup/slug-availability?slug=muthoni%20%26%20co");
+    expect(apiPaths.myFirmApplications()).toBe("/me/firm-applications");
+    expect(apiPaths.withdrawFirmApplication("a")).toBe("/me/firm-applications/a:withdraw");
+    expect(apiPaths.platformApplications("pending")).toBe("/platform/firm-applications?status=pending");
+    expect(apiPaths.approveApplication("a")).toBe("/platform/firm-applications/a:approve");
+    expect(apiPaths.rejectApplication("a")).toBe("/platform/firm-applications/a:reject");
     expect(withCursor("/firms/firm/clients?matter_id=m", "abc", 10)).toBe("/firms/firm/clients?matter_id=m&limit=10&cursor=abc");
   });
 });

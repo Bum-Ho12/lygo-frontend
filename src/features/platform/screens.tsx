@@ -9,6 +9,7 @@ import type { PlatformFirm, SearchHit } from "@/lib/api/types";
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from "@/components/ui";
 import { DataTable } from "@/components/record-view";
 import { EmptyState, QueryState, errorText } from "@/components/states";
+import { slugify } from "@/lib/slug";
 
 function useFirms() {
   return useQuery({
@@ -113,14 +114,6 @@ export function FirmsScreen() {
       </QueryState>
     </div>
   );
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 63);
 }
 
 export function FirmDetailScreen({ firmId }: { firmId: string }) {
