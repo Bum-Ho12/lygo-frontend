@@ -1,0 +1,31 @@
+:root {
+  --paper: #f3efe4;
+  --paper-raised: #fffdf8;
+  --ink: #172033;
+  --ink-soft: #4c5870;
+  --line: #ddd4c3;
+  --brand: #0e3b34;
+  --brand-foreground: #f6f1e6;
+  --accent: #8a4518;
+  --info: #1d4ed8;
+  --caution: #a16207;
+  --warning: #c2410c;
+  --critical: #b42318;
+  --ok: #0f766e;
+  --radius: 14px;
+  --shadow: 0 16px 40px rgb(23 32 51 / 8%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #101613;
+    --paper-raised: #24312b;
+    --ink: #f4efe4;
+    --ink-soft: #d9d0c0;
+    --line: #7d9086;
+    --brand: #e4c98a;
+    --brand-foreground: #1c1508;
+    --accent: #e7a06a;
+    --shadow: 0 16px 40px rgb(0 0 0 / 28%);
+  }
+}
