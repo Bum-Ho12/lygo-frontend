@@ -47,6 +47,7 @@ function navFor(slug: string, surface: Surface, membership: Membership): NavItem
     ...(allow("research.run") ? [{ href: `${root}/research`, label: "Research" }] : []),
     ...(allow("ai.use") ? [{ href: `${root}/assistant`, label: "Assistant" }] : []),
     ...(allow("ai.approve") ? [{ href: `${root}/answers`, label: "Answers" }] : []),
+    ...(allow("factcheck.run") ? [{ href: `${root}/checks`, label: "Checks" }] : []),
     ...(allow("compare.run") ? [{ href: `${root}/compare`, label: "Compare" }] : []),
     ...(allow("documents.tag") ? [{ href: `${root}/review-queue`, label: "Review" }] : []),
     ...(allow("entities.read") ? [{ href: `${root}/parties`, label: "Parties" }] : []),

@@ -42,6 +42,10 @@ describe("api paths", () => {
     expect(apiUrl("/firms/firm/members")).toBe("http://localhost:8000/v1/firms/firm/members");
     if (previous === undefined) delete process.env.LYGO_API_URL;
     else process.env.LYGO_API_URL = previous;
+    expect(apiPaths.factChecks("firm")).toBe("/firms/firm/fact-checks");
+    expect(apiPaths.chronology("firm", "matter")).toBe("/firms/firm/matters/matter/chronology");
+    expect(apiPaths.caseBuilder("firm", "matter")).toBe("/firms/firm/matters/matter/case-builder");
+    expect(apiPaths.resetLink()).toBe("/platform/users/reset-link");
     expect(apiPaths.corpusSection("doc", "s.12")).toBe("/corpus/documents/doc/sections/s.12");
     expect(apiPaths.corpusSection("doc", "s.12 (1)")).toBe("/corpus/documents/doc/sections/s.12%20(1)");
     expect(withCursor("/firms/firm/clients?matter_id=m", "abc", 10)).toBe("/firms/firm/clients?matter_id=m&limit=10&cursor=abc");

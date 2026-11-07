@@ -25,10 +25,23 @@ export function FirmsScreen() {
   const [slug, setSlug] = useState("");
   const [owner, setOwner] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [handoff, setHandoff] = useState<string | null>(null);
   const create = useMutation({
-    mutationFn: () => api<{ id: string; slug: string }>(apiPaths.platformFirms(), { method: "POST", body: { name, slug, owner_email: owner } }),
+    mutationFn: () =>
+      api<{ id: string; slug: string; owner_invitation_emailed?: boolean; owner_invite_link?: string | null }>(apiPaths.platformFirms(), {
+        method: "POST",
+        body: { name, slug, owner_email: owner },
+      }),
     onSuccess: (firm) => {
-      setMessage(`Firm created. An invitation email is on its way to ${owner}.`);
+      const emailed = firm.owner_invitation_emailed !== false;
+      setHandoff(emailed ? null : firm.owner_invite_link ?? null);
+      setMessage(
+        emailed
+          ? `Firm created. An invitation email is on its way to ${owner}.`
+          : firm.owner_invite_link
+            ? `Firm created. The email could not be sent. Share the link below with ${owner}.`
+            : `Firm created. The email could not be sent to ${owner}.`,
+      );
       setName("");
       setSlug("");
       setOwner("");
@@ -73,6 +86,13 @@ export function FirmsScreen() {
           </div>
         </form>
         {message ? <p className="mt-3 text-sm">{message}</p> : null}
+        {handoff ? (
+          <p className="mt-2 break-all text-sm">
+            <a href={handoff} className="underline">
+              {handoff}
+            </a>
+          </p>
+        ) : null}
       </Card>
       <QueryState isLoading={firms.isLoading} error={firms.error} empty={{ when: rows.length === 0, title: "No firms yet" }}>
         <DataTable

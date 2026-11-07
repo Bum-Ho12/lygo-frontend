@@ -3,16 +3,19 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useMe, useMemberships } from "@/features/queries";
-import { isPlatformMember } from "@/lib/auth/routing";
+import { can, isPlatformMember } from "@/lib/auth/routing";
 import { AppShell } from "@/components/shell";
 import { EmptyState, LoadingBlock, ProblemView } from "@/components/states";
 
-const nav = [
-  { href: "/platform/firms", label: "Firms" },
-  { href: "/platform/corpus", label: "Law library" },
-  { href: "/platform/library", label: "Look up" },
-  { href: "/platform/health", label: "Status" },
-];
+function platformNav(canManage: boolean) {
+  return [
+    { href: "/platform/firms", label: "Firms" },
+    { href: "/platform/corpus", label: "Law library" },
+    { href: "/platform/library", label: "Look up" },
+    ...(canManage ? [{ href: "/platform/recovery", label: "Recovery" }] : []),
+    { href: "/platform/health", label: "Status" },
+  ];
+}
 
 export function PlatformGate({ children }: { children: ReactNode }) {
   const me = useMe();
@@ -39,7 +42,7 @@ export function PlatformGate({ children }: { children: ReactNode }) {
     <AppShell
       title="Platform"
       subtitle={me.data?.name}
-      nav={nav}
+      nav={platformNav(items.some((item) => can(item, "platform.manage")))}
       footer={
         <Link href="/select-context" className="mt-4 block px-3 text-sm text-paper/80">
           Switch context

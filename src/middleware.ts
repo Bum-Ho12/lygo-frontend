@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "localhost";
-const PUBLIC_PATHS = ["/", "/login", "/register", "/invite", "/mfa", "/forgot-password", "/reset-password"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/invite", "/accept-invite", "/mfa", "/forgot-password", "/reset-password"];
 
 export function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
