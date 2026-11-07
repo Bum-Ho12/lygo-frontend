@@ -1,6 +1,6 @@
 # 12 — Deployment
 
-- Build: `next build` with `output: 'standalone'` → small Node container.
+- Build: `next build`, served with `next start` (Node.js app on RumptyCloud).
 - Host on RumptyCloud (same platform as the API), behind a CDN/WAF for static assets and
   wildcard TLS (`*.lygo.<tld>`) plus per-firm custom domains (certificates issued automatically).
 - Environments: `local`, `staging` (synthetic data only), `production`.
@@ -26,6 +26,3 @@ One-time setup in GitHub → Settings → Secrets and variables → Actions:
 On RumptyCloud: connect this repo as a Node.js app — install `pnpm install --frozen-lockfile`,
 build `pnpm build`, start `pnpm start`, port `3000`, health check `GET /api/health`. Set runtime
 secrets `LYGO_API_URL` and `SESSION_SECRET` there — never in the repo.
-
-Local Windows note: `next build` with `output: "standalone"` needs symlink rights — enable
-Windows Developer Mode, or use `pnpm dev` locally. CI (Linux) is unaffected.
