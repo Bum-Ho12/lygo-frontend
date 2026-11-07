@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-// Liveness probe for RumptyCloud / Docker. Excluded from the auth gate in middleware.ts.
+// Liveness probe for RumptyCloud. Excluded from the auth gate in middleware.ts.
 export const dynamic = "force-dynamic";
 
 export function GET() {
