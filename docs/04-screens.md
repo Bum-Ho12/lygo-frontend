@@ -15,7 +15,7 @@
 | Overview | Seats, clients, documents processed, AI usage, storage health, compliance reminders (ODPC registration, DPA signed) |
 | Members | Invite, roles, MFA status, deactivate |
 | Clients | Create individual/business clients, invite portal users, archive |
-| Storage | Destinations (Lygo-hosted / S3 / Azure / GCS / SFTP / webhook), region shown, test connection, per-artefact policy editor, export jobs |
+| Storage | Two choices, the active one marked: **Lygo storage** (default, nothing to set up) or **Your own storage** (S3-compatible bucket: add → test → "Use this bucket"; switch back any time; existing documents stay put; outside-Kenya buckets require a transfer basis). Later: Azure / GCS / SFTP / webhook, per-artefact policy editor, export jobs |
 | AI settings | Features on/off, client assistant on/off, approval mode, reading level, firm instructions |
 | Rule packs | Enabled packs, thresholds, firm custom rules, preview against a sample document |
 | Branding | Logo, colours, portal domain, email/SMS sender name |
@@ -27,7 +27,7 @@
 |---|---|
 | Home | My matters, upcoming deadlines, new flags, pending approvals, review queue count |
 | Matters list / detail | Tabs: Overview (fact sheet), Documents, Flags, Deadlines, Research, Drafts, Chat (client conversation), Reports, Activity |
-| Client dashboard | Client profile, all matters, documents, flags summary, portal users, consents |
+| Client dashboard | Client profile, all matters, documents with an upload area (optionally filed under one of the client's matters), flags summary, portal users, consents |
 | Knowledge base | Upload (endpoint #1), tags, "share with clients" toggle, search |
 | Research | Question box → answer with verified authorities; case builder (issues → law → arguments → gaps); save to matter |
 | Review queue | Side-by-side scan and OCR text, correct and approve |

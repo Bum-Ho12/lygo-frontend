@@ -481,6 +481,8 @@ export function ClientDashboard({ clientId }: { clientId: string }) {
   const matters = useList<Matter>(["firm", firmId, "client", clientId, "matters"], apiPaths.clientMatters(firmId, clientId));
   const documents = useList<DocumentRow>(["firm", firmId, "client", clientId, "documents"], apiPaths.clientDocuments(firmId, clientId));
   const canManage = usePermission("clients.manage");
+  const canUpload = usePermission("documents.upload");
+  const [uploadMatter, setUploadMatter] = useState("");
   const [title, setTitle] = useState("");
   const [area, setArea] = useState("general");
   const [message, setMessage] = useState<string | null>(null);
@@ -556,6 +558,25 @@ export function ClientDashboard({ clientId }: { clientId: string }) {
           </section>
           <section className="space-y-3">
             <h2 className="font-display text-2xl">Documents</h2>
+            {canUpload ? (
+              <Card>
+                <div className="space-y-3">
+                  {collect(matters).length > 0 ? (
+                    <Field label="File it under" hint="Optional. Documents can also stay with the client generally.">
+                      <Select value={uploadMatter} onChange={(event) => setUploadMatter(event.target.value)}>
+                        <option value="">The client (no matter)</option>
+                        {collect(matters).map((matter) => (
+                          <option key={matter.id} value={matter.id}>
+                            {matter.title}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  ) : null}
+                  <UploadDropzone firmId={firmId} uploadPath={apiPaths.clientDocuments(firmId, clientId)} matterId={uploadMatter || undefined} />
+                </div>
+              </Card>
+            ) : null}
             <DocumentList slug={slug} documents={collect(documents)} loading={documents.isLoading} />
             <LoadMore hasNextPage={Boolean(documents.hasNextPage)} isFetchingNextPage={documents.isFetchingNextPage} onClick={() => documents.fetchNextPage()} />
           </section>
