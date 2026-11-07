@@ -19,6 +19,8 @@ export type User = {
   email: string;
   name: string;
   locale: string;
+  /** Set for Lygo staff (platform_admin / platform_support). */
+  platform_role?: string | null;
 };
 
 export type MembershipDirectory = {
@@ -82,6 +84,12 @@ export type FirmApplicationReview = FirmApplication & {
   phone: string | null;
   terms_version: string;
 };
+
+export type PendingInvite = { id: string; email: string; role: string; client_id?: string | null; expires_at: string; expired: boolean };
+export type InviteResult = { id: string; email: string; role: string; email_sent?: boolean; invite_link?: string | null };
+
+/** The text the engine read, per section. Flag spans and field offsets index into `full_text`. */
+export type DocumentSectionText = { path: string; number: string; heading: string; page: number | null; full_text: string };
 
 export type PlatformFirm = {
   id: string;
@@ -187,6 +195,9 @@ export type ExtractedField = {
   key: string;
   value: string;
   section_path: string;
+  /** Offsets within the section's full_text (see DocumentSectionText). */
+  start?: number | null;
+  end?: number | null;
 };
 
 export type SearchHit = {

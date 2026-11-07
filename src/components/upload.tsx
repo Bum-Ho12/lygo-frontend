@@ -14,6 +14,7 @@ export function UploadDropzone({
   title,
   tags,
   camera = false,
+  audience = "firm",
   onUploaded,
 }: {
   firmId: string;
@@ -22,6 +23,8 @@ export function UploadDropzone({
   title?: string;
   tags?: string;
   camera?: boolean;
+  /** Clients never hear about processing: their copy simply reaches the firm. */
+  audience?: "firm" | "client";
   onUploaded?: (document: DocumentRow) => void;
 }) {
   const queryClient = useQueryClient();
@@ -36,7 +39,8 @@ export function UploadDropzone({
       return apiForm<DocumentRow>(uploadPath, form);
     },
     onSuccess: (document) => {
-      setMessage(document.duplicate ? "That file is already in this firm." : "Uploaded. Lygo is reading it.");
+      if (audience === "client") setMessage(document.duplicate ? "You've already sent this file." : "Sent. Your advocate's team will receive it.");
+      else setMessage(document.duplicate ? "That file is already in this firm." : "Uploaded. Lygo is reading it.");
       void queryClient.invalidateQueries({ queryKey: ["firm", firmId] }); // lists refresh in the background; the dropzone is free again
       onUploaded?.(document);
     },
@@ -49,6 +53,16 @@ export function UploadDropzone({
   };
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    // Never ignore a file silently: say why it wasn't taken.
+    onDropRejected: (rejections) => {
+      const first = rejections[0];
+      const many = rejections.length > 1 || first?.errors.some((e) => e.code === "too-many-files");
+      setMessage(
+        many
+          ? "Please add one file at a time."
+          : `${first?.file.name ?? "That file"} can't be added here. Use a PDF, Word document, CSV, or a photo (PNG, JPG, WEBP, TIFF).`,
+      );
+    },
     multiple: false,
     accept: {
       "application/pdf": [".pdf"],
@@ -83,7 +97,11 @@ export function UploadDropzone({
           />
         </label>
       ) : null}
-      {message ? <p role="status">{message}</p> : null}
+      {message ? (
+        <p role="status" className="text-sm">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

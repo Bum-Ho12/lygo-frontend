@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 const buttonVariants = {
   primary: "bg-brand text-brand-foreground hover:opacity-90",
@@ -11,7 +11,7 @@ export function Button({
   variant = "primary",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof buttonVariants }) {
+}: ComponentProps<"button"> & { variant?: keyof typeof buttonVariants }) {
   return (
     <button
       className={`inline-flex items-center justify-center gap-2 rounded-lygo px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${buttonVariants[variant]} ${className}`}
@@ -72,3 +72,4 @@ export function PageHeader({ title, lede, action }: { title: string; lede?: stri
     </header>
   );
 }
+

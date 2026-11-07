@@ -7,7 +7,7 @@ import { apiList } from "@/lib/api/browser";
 import { apiPaths, withCursor } from "@/lib/api/paths";
 import type { Deadline, DocumentRow, Matter } from "@/lib/api/types";
 import { collect, useList, useResource } from "@/features/queries";
-import { documentStatusLabel, formatWhen, workStatusLabel } from "@/lib/format";
+import { clientDocumentStatus, formatWhen, workStatusLabel } from "@/lib/format";
 import { usePermission, useTenant } from "@/lib/tenancy/context";
 import { DocumentScreen } from "@/components/document-screen";
 import { UploadDropzone } from "@/components/upload";
@@ -63,10 +63,11 @@ export function PortalHome() {
       </section>
       <section className="space-y-3">
         <h2 className="font-display text-2xl">Matters</h2>
+        {!matters.isLoading && collect(matters).length === 0 ? <p className="text-sm text-ink-soft">{firmName} hasn&apos;t opened a matter for you yet.</p> : null}
         <ul className="space-y-2">
           {collect(matters).map((matter) => (
             <li key={matter.id}>
-              <Link href={`/f/${slug}/portal/matters/${matter.id}`} className="block rounded-lygo border border-line px-4 py-3">
+              <Link href={`/f/${slug}/portal/matters/${matter.id}`} className="block rounded-lygo border border-line bg-paper-raised px-4 py-3 hover:bg-paper">
                 <span className="font-medium">{matter.title}</span>
                 <span className="block text-sm text-ink-soft">{workStatusLabel(matter.status)}</span>
               </Link>
@@ -75,16 +76,22 @@ export function PortalHome() {
         </ul>
       </section>
       <section className="space-y-3">
-        <h2 className="font-display text-2xl">Recent documents</h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="font-display text-2xl">Recent documents</h2>
+          <Link href={`/f/${slug}/portal/documents`} className="text-sm font-semibold underline">
+            All documents
+          </Link>
+        </div>
+        {!documents.isLoading && collect(documents).length === 0 ? <p className="text-sm text-ink-soft">No documents yet. You can send one from Documents.</p> : null}
         <ul className="space-y-2">
           {collect(documents)
             .slice(0, 5)
             .map((doc) => (
               <li key={doc.id}>
-                <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line px-4 py-3 text-sm">
+                <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line bg-paper-raised px-4 py-3 text-sm hover:bg-paper">
                   <span className="font-medium">{doc.title}</span>
                   <span className="block text-ink-soft">
-                    {documentStatusLabel(doc.status)} · {formatWhen(doc.created_at)}
+                    {clientDocumentStatus(doc.status)} · {formatWhen(doc.created_at)}
                   </span>
                 </Link>
               </li>
@@ -136,8 +143,8 @@ export function PortalDocuments() {
   const canUpload = usePermission("documents.upload");
   return (
     <div className="space-y-6">
-      <PageHeader title="Documents" lede="Files for your matters. A photo of a paper document is fine." />
-      {canUpload && clientId ? <UploadDropzone firmId={firmId} uploadPath={apiPaths.clientDocuments(firmId, clientId)} camera /> : null}
+      <PageHeader title="Documents" lede="Documents your advocate has shared with you, and the ones you have sent. A photo of a paper document is fine." />
+      {canUpload && clientId ? <UploadDropzone firmId={firmId} uploadPath={apiPaths.clientDocuments(firmId, clientId)} camera audience="client" /> : null}
       <QueryState isLoading={documents.isLoading} error={documents.error} empty={{ when: collect(documents).length === 0, title: "No documents yet" }}>
         <ul className="space-y-2">
           {collect(documents).map((doc) => (
@@ -145,7 +152,7 @@ export function PortalDocuments() {
               <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line bg-paper-raised px-4 py-3 text-sm">
                 <span className="font-medium">{doc.title || doc.original_filename}</span>
                 <span className="block text-ink-soft">
-                  {documentStatusLabel(doc.status)} · version {doc.version_no} · {formatWhen(doc.created_at)}
+                  {clientDocumentStatus(doc.status)} · {formatWhen(doc.created_at)}
                 </span>
               </Link>
             </li>
@@ -204,8 +211,8 @@ export function PortalMatter({ matterId }: { matterId: string }) {
             <ul className="space-y-2">
               {mine.map((doc) => (
                 <li key={doc.id}>
-                  <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line px-3 py-2 text-sm">
-                    {doc.title} · {documentStatusLabel(doc.status)}
+                  <Link href={`/f/${slug}/portal/documents/${doc.id}`} className="block rounded-lygo border border-line bg-paper-raised px-3 py-2 text-sm hover:bg-paper">
+                    {doc.title || doc.original_filename} · {clientDocumentStatus(doc.status)}
                   </Link>
                 </li>
               ))}

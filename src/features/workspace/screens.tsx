@@ -15,10 +15,11 @@ import { usePermission, useTenant } from "@/lib/tenancy/context";
 import { CaseBuilderPanel, ChronologyPanel } from "@/features/intelligence/screens";
 import { DocumentScreen } from "@/components/document-screen";
 import { UploadDropzone } from "@/components/upload";
+import { PortalAccess } from "@/components/portal-access";
+import { PRACTICE_AREAS, practiceAreaLabel } from "@/lib/practice-areas";
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from "@/components/ui";
 import { EmptyState, LoadMore, QueryState, errorText } from "@/components/states";
 
-const AREAS = ["general", "litigation", "conveyancing", "commercial", "employment", "family", "criminal", "tax"];
 
 function useIds() {
   const { membership, firm } = useTenant();
@@ -196,19 +197,23 @@ export function MatterScreen({ matterId }: { matterId: string }) {
                   </Select>
                 </Field>
                 <Field label="Practice area">
-                  <TextInput
-                    list="practice-areas"
+                  <Select
                     value={area || matter.data.practice_area}
-                    onChange={(event) => setArea(event.target.value)}
-                    onBlur={() => {
-                      if (area && area !== matter.data?.practice_area) patch.mutate({ practice_area: area });
+                    disabled={!canManage || patch.isPending}
+                    onChange={(event) => {
+                      setArea(event.target.value);
+                      patch.mutate({ practice_area: event.target.value });
                     }}
-                  />
-                  <datalist id="practice-areas">
-                    {AREAS.map((item) => (
-                      <option key={item} value={item} />
+                  >
+                    {(PRACTICE_AREAS.some((item) => item.value === matter.data?.practice_area)
+                      ? PRACTICE_AREAS
+                      : [{ value: matter.data.practice_area, label: practiceAreaLabel(matter.data.practice_area) }, ...PRACTICE_AREAS]
+                    ).map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
                     ))}
-                  </datalist>
+                  </Select>
                 </Field>
                 <Field label="People on the matter">
                   <p className="py-2 text-sm">
@@ -358,9 +363,11 @@ function FactsPanel({ firmId, matterId }: { firmId: string; matterId: string }) 
               Confirm now
             </label>
           ) : null}
-          <Button type="submit" disabled={add.isPending}>
-            Add fact
-          </Button>
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={add.isPending}>
+              {add.isPending ? "Adding…" : "Add fact"}
+            </Button>
+          </div>
         </form>
       ) : null}
       {message ? <p className="text-sm text-critical">{message}</p> : null}
@@ -438,9 +445,16 @@ function DocumentList({ slug, documents, loading }: { slug: string; documents: D
           <Link href={docHref(slug, doc.id)} className="block rounded-lygo border border-line bg-paper-raised px-4 py-3 text-sm">
             <span className="font-medium">{doc.title || doc.original_filename}</span>
             <span className="block text-ink-soft">
-              {documentStatusLabel(doc.status)}
-              {doc.doc_type ? ` · ${doc.doc_type}` : ""} · {doc.page_count || "—"} pages · v{doc.version_no} · {formatBytes(doc.size_bytes)}
-              {doc.duplicate ? " · already stored" : ""}
+              {[
+                documentStatusLabel(doc.status),
+                doc.doc_type ? labelize(doc.doc_type) : null,
+                doc.page_count ? `${doc.page_count} ${doc.page_count === 1 ? "page" : "pages"}` : null,
+                doc.version_no > 1 ? `version ${doc.version_no}` : null,
+                formatBytes(doc.size_bytes),
+                doc.duplicate ? "already stored" : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           </Link>
         </li>
@@ -531,9 +545,9 @@ export function ClientDashboard({ clientId }: { clientId: string }) {
                 </Field>
                 <Field label="Practice area">
                   <Select value={area} onChange={(event) => setArea(event.target.value)}>
-                    {AREAS.map((item) => (
-                      <option key={item} value={item}>
-                        {labelize(item)}
+                    {PRACTICE_AREAS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
                       </option>
                     ))}
                   </Select>
@@ -580,6 +594,17 @@ export function ClientDashboard({ clientId }: { clientId: string }) {
             <DocumentList slug={slug} documents={collect(documents)} loading={documents.isLoading} />
             <LoadMore hasNextPage={Boolean(documents.hasNextPage)} isFetchingNextPage={documents.isFetchingNextPage} onClick={() => documents.fetchNextPage()} />
           </section>
+          {canManage ? (
+            <section className="space-y-3">
+              <div>
+                <h2 className="font-display text-2xl">Portal access</h2>
+                <p className="text-sm text-ink-soft">People at {client.data.name} who can sign in to see their matters and finished documents.</p>
+              </div>
+              <Card>
+                <PortalAccess firmId={firmId} clientId={clientId} clientName={client.data.name} />
+              </Card>
+            </section>
+          ) : null}
         </div>
       ) : null}
     </QueryState>

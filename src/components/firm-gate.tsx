@@ -119,7 +119,7 @@ export function FirmGate({ firmSlug, children }: { firmSlug: string; children: R
       <div style={style}>
         <AppShell
           title={titles[surface]}
-          subtitle={[firm.data?.name ?? membership.firm_name ?? firmSlug, firm.data?.plan ? firm.data.plan : null].filter(Boolean).join(" · ")}
+          subtitle={firm.data?.name ?? membership.firm_name ?? firmSlug}
           nav={navFor(firmSlug, surface, membership)}
           portal={surface === "portal"}
           footer={
