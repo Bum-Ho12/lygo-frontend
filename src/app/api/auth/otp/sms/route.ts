@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   const payload: { phone?: string; code?: string } = {};
   if (body.phone) payload.phone = body.phone;
   if (body.code) payload.code = body.code;
-  const { status, data } = await postAuth("/auth/otp/sms", payload);
+  const { status, data } = await postAuth("/v1/auth/otp/sms", payload);
   const tokens = status < 400 ? tokenPair(data) : null;
   if (tokens) return establishSession(tokens, false);
   if (status >= 400) return NextResponse.json(toProblem(status, data), { status });

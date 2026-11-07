@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
-import { apiBase } from "@/lib/api/backend";
+import { apiUrl } from "@/lib/api/backend";
 import { COOKIE, clearSession, persistSession, slideSession } from "@/lib/auth/cookies";
 import { postAuth, tokenPair } from "@/lib/auth/upstream";
 
@@ -39,7 +39,7 @@ async function refreshedToken(): Promise<string | null> {
       const refresh = jar.get(COOKIE.refresh)?.value;
       if (!refresh) return null;
       const shared = jar.get(COOKIE.shared)?.value === "1";
-      const { status, data } = await postAuth("/auth/refresh", { refresh_token: refresh });
+      const { status, data } = await postAuth("/v1/auth/refresh", { refresh_token: refresh });
       const tokens = status < 400 ? tokenPair(data) : null;
       if (!tokens) {
         clearSession(jar);
@@ -91,7 +91,7 @@ async function forward(req: NextRequest, parts: string[]) {
 
   const hasBody = method !== "GET" && method !== "HEAD";
   const body = hasBody ? await req.arrayBuffer() : undefined;
-  const url = `${apiBase()}${path}${req.nextUrl.search}`;
+  const url = `${apiUrl(path)}${req.nextUrl.search}`;
   const send = (token: string | null) => {
     const nextHeaders = new Headers(headers);
     if (token) nextHeaders.set("Authorization", `Bearer ${token}`);

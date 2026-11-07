@@ -102,10 +102,18 @@ export function MembersScreen() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("advocate");
   const [message, setMessage] = useState<string | null>(null);
+  const [handoff, setHandoff] = useState<string | null>(null);
   const invite = useMutation({
-    mutationFn: () => api<{ email_sent?: boolean }>(apiPaths.invitations(firmId), { method: "POST", body: { email, role } }),
+    mutationFn: () => api<{ email_sent?: boolean; invite_link?: string | null }>(apiPaths.invitations(firmId), { method: "POST", body: { email, role } }),
     onSuccess: (result) => {
-      setMessage(result.email_sent === false ? `Saved the invitation for ${email}, but the email could not be sent. Resend it below.` : `Invitation sent to ${email}.`);
+      setHandoff(result.email_sent === false ? result.invite_link ?? null : null);
+      setMessage(
+        result.email_sent === false
+          ? result.invite_link
+            ? `The email could not be sent. Share the link below with ${email}.`
+            : `Saved the invitation for ${email}, but the email could not be sent. Resend it below.`
+          : `Invitation sent to ${email}.`,
+      );
       setEmail("");
       void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "invitations"] });
     },
@@ -120,8 +128,18 @@ export function MembersScreen() {
     onError: (error) => setMessage(errorText(error)),
   });
   const resend = useMutation({
-    mutationFn: (invitationId: string) => api<{ email_sent?: boolean }>(apiPaths.invitationResend(firmId, invitationId), { method: "POST", body: {} }),
-    onSuccess: (result) => setMessage(result.email_sent === false ? "Still couldn't send that email." : "Invitation sent again."),
+    mutationFn: (invitationId: string) =>
+      api<{ email_sent?: boolean; invite_link?: string | null }>(apiPaths.invitationResend(firmId, invitationId), { method: "POST", body: {} }),
+    onSuccess: (result) => {
+      setHandoff(result.email_sent === false ? result.invite_link ?? null : null);
+      setMessage(
+        result.email_sent === false
+          ? result.invite_link
+            ? "The email could not be sent. Share the link below."
+            : "Still couldn't send that email."
+          : "Invitation sent again.",
+      );
+    },
     onError: (error) => setMessage(errorText(error)),
   });
 
@@ -134,6 +152,7 @@ export function MembersScreen() {
           onSubmit={(event) => {
             event.preventDefault();
             setMessage(null);
+            setHandoff(null);
             invite.mutate();
           }}
         >
@@ -156,6 +175,13 @@ export function MembersScreen() {
           </div>
         </form>
         {message ? <p className="mt-3 text-sm">{message}</p> : null}
+        {handoff ? (
+          <p className="mt-2 break-all text-sm">
+            <a href={handoff} className="underline">
+              {handoff}
+            </a>
+          </p>
+        ) : null}
       </Card>
       <QueryState isLoading={members.isLoading} error={members.error} empty={{ when: rows.length === 0, title: "No members yet" }}>
         <DataTable
@@ -246,19 +272,32 @@ export function ClientsScreen() {
   const [inviteFor, setInviteFor] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [handoff, setHandoff] = useState<string | null>(null);
   const create = useMutation({
     mutationFn: () => api(apiPaths.clients(firmId), { method: "POST", body: { name, type, sensitivity } }),
     onSuccess: () => {
       setName("");
+      setHandoff(null);
       setMessage("Client added.");
       void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] });
     },
     onError: (error) => setMessage(errorText(error)),
   });
   const invite = useMutation({
-    mutationFn: () => api(apiPaths.clientInvitations(firmId, inviteFor ?? ""), { method: "POST", body: { email, role: "client_user" } }),
-    onSuccess: () => {
-      setMessage(`Portal invite sent to ${email}.`);
+    mutationFn: () =>
+      api<{ email_sent?: boolean; invite_link?: string | null }>(apiPaths.clientInvitations(firmId, inviteFor ?? ""), {
+        method: "POST",
+        body: { email, role: "client_user" },
+      }),
+    onSuccess: (result) => {
+      setHandoff(result.email_sent === false ? result.invite_link ?? null : null);
+      setMessage(
+        result.email_sent === false
+          ? result.invite_link
+            ? `The email could not be sent. Share the link below with ${email}.`
+            : `Saved the portal invitation for ${email}, but the email could not be sent.`
+          : `Portal invite sent to ${email}.`,
+      );
       setEmail("");
       setInviteFor(null);
     },
@@ -304,6 +343,13 @@ export function ClientsScreen() {
         </form>
       </Card>
       {message ? <p className="text-sm">{message}</p> : null}
+      {handoff ? (
+        <p className="break-all text-sm">
+          <a href={handoff} className="underline">
+            {handoff}
+          </a>
+        </p>
+      ) : null}
       <QueryState isLoading={clients.isLoading} error={clients.error} empty={{ when: rows.length === 0, title: "No clients yet", body: "Add the first client to open matters and receive documents." }}>
         <ul className="space-y-3">
           {rows.map((client) => (

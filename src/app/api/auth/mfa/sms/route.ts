@@ -15,7 +15,7 @@ export async function POST() {
       { status: 401 },
     );
   }
-  const { status, data } = await postAuth("/auth/mfa/sms/send", { mfa_token: mfa });
+  const { status, data } = await postAuth("/v1/auth/mfa/sms/send", { mfa_token: mfa });
   if (status >= 400) return NextResponse.json(toProblem(status, data), { status });
   const sent = data && typeof data === "object" && "sent_to" in data && typeof data.sent_to === "string" ? data.sent_to : "";
   return NextResponse.json({ sent_to: sent });

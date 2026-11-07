@@ -66,6 +66,11 @@ export const apiPaths = {
   totpEnroll: () => "/me/mfa/totp/enroll",
   totpDisable: () => "/me/mfa/totp/disable",
   recoveryCodes: () => "/me/mfa/recovery-codes",
+  factChecks: (firmId: string) => `/firms/${firmId}/fact-checks`,
+  factCheck: (firmId: string, factCheckId: string) => `/firms/${firmId}/fact-checks/${factCheckId}`,
+  chronology: (firmId: string, matterId: string) => `/firms/${firmId}/matters/${matterId}/chronology`,
+  caseBuilder: (firmId: string, matterId: string) => `/firms/${firmId}/matters/${matterId}/case-builder`,
+  resetLink: () => "/platform/users/reset-link",
 };
 
 export function withCursor(path: string, cursor: string | null, limit = 25): string {

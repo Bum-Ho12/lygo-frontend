@@ -12,6 +12,7 @@ import { collect, useFirmMatters, useList, useMembers, useResource } from "@/fea
 import { documentStatusLabel, formatBytes, formatWhen, labelize, workStatusLabel } from "@/lib/format";
 import { surfaceFromPath } from "@/lib/auth/routing";
 import { usePermission, useTenant } from "@/lib/tenancy/context";
+import { CaseBuilderPanel, ChronologyPanel } from "@/features/intelligence/screens";
 import { DocumentScreen } from "@/components/document-screen";
 import { UploadDropzone } from "@/components/upload";
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from "@/components/ui";
@@ -278,7 +279,9 @@ export function MatterScreen({ matterId }: { matterId: string }) {
             {!deadlines.isLoading && collect(deadlines).length === 0 ? <p className="text-sm text-ink-soft">No deadlines on this matter.</p> : null}
           </section>
           <FactsPanel firmId={firmId} matterId={matterId} />
+          <ChronologyPanel firmId={firmId} matterId={matterId} slug={slug} />
           <ResearchPanel firmId={firmId} matterId={matterId} slug={slug} />
+          <CaseBuilderPanel firmId={firmId} matterId={matterId} slug={slug} />
         </div>
       ) : null}
     </QueryState>

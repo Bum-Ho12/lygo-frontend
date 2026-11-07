@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     shared_device?: boolean;
   };
   const shared = Boolean(body.shared_device);
-  const { status, data } = await postAuth("/auth/login", {
+  const { status, data } = await postAuth("/v1/auth/login", {
     email: body.email ?? "",
     password: body.password ?? "",
   });
