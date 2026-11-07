@@ -1,21 +1,6 @@
 import { ApiError, problemMessage } from "@/lib/api/problem";
 
-export const PRACTICE_AREAS: { value: string; label: string }[] = [
-  { value: "general", label: "General practice" },
-  { value: "litigation", label: "Litigation" },
-  { value: "commercial", label: "Commercial" },
-  { value: "conveyancing", label: "Conveyancing" },
-  { value: "insurance", label: "Insurance" },
-  { value: "employment", label: "Employment" },
-  { value: "family", label: "Family" },
-  { value: "immigration", label: "Immigration" },
-  { value: "criminal", label: "Criminal" },
-  { value: "tax", label: "Tax" },
-  { value: "banking", label: "Banking & finance" },
-  { value: "intellectual_property", label: "Intellectual property" },
-  { value: "probate", label: "Probate & succession" },
-  { value: "other", label: "Other" },
-];
+export { PRACTICE_AREAS, practiceAreaLabel } from "@/lib/practice-areas";
 
 export const FIRM_SIZES = [
   { value: "solo", label: "Just me" },
@@ -24,9 +9,6 @@ export const FIRM_SIZES = [
   { value: "21+", label: "21 or more" },
 ] as const;
 
-export function practiceAreaLabel(value: string): string {
-  return PRACTICE_AREAS.find((area) => area.value === value)?.label ?? value;
-}
 
 export const STATUS_LABEL: Record<string, string> = {
   pending: "Under review",

@@ -72,6 +72,14 @@ export function problemMessage(problem: Problem): string {
   if (problem.code === "invalid_reset") return "This reset link is invalid or has expired. Request a new one.";
   if (problem.code === "not_indexed") return "That document isn't ready to summarise yet.";
   if (problem.code === "not_pending") return "That answer is no longer waiting for review.";
+  if (problem.code === "invitation_pending") return "An invitation to that email is already waiting. Use Resend on it instead of inviting again.";
+  if (problem.code === "already_member") return "That person is already a member of this firm.";
+  if (problem.code === "already_has_access") return "That person already has access to this client's portal.";
+  if (problem.code === "invalid_invitation") return "This invitation is no longer valid. It may have been withdrawn, used or expired. Ask for a new one.";
+  if (problem.code === "last_owner") return "A firm must keep at least one active owner.";
+  if (problem.code === "destination_in_use") return "That bucket is in use or still holds documents, so it can't be removed.";
+  if (problem.code === "destination_untested") return "Test the connection first, then use this bucket.";
+  if (problem.code === "endpoint_not_allowed") return problem.detail || "That endpoint isn't allowed. Use a public https:// address.";
   if (problem.code === "api_unavailable" || problem.status === 503) {
     return "Lygo isn't available right now. Please try again in a moment.";
   }

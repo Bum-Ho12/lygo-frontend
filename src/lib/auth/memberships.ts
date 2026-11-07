@@ -1,7 +1,7 @@
 import { api } from "@/lib/api/browser";
 import { apiPaths } from "@/lib/api/paths";
 import { ApiError } from "@/lib/api/problem";
-import type { Client, Firm, Membership, MembershipDirectory } from "@/lib/api/types";
+import type { Client, Firm, Membership, MembershipDirectory, User } from "@/lib/api/types";
 import { isKnownRole } from "@/lib/auth/routing";
 
 export async function loadMemberships(): Promise<Membership[]> {
@@ -57,11 +57,12 @@ export async function loadMemberships(): Promise<Membership[]> {
     });
   }
 
-  try {
-    await api(apiPaths.platformFirms());
+  // /me says whether this person is Lygo staff; no need to probe an admin-only endpoint (which logged a 403 on every page).
+  const me = await api<User>(apiPaths.me());
+  if (me.platform_role === "platform_admin" || me.platform_role === "platform_support") {
     items.push({
       kind: "platform",
-      role: "platform_admin",
+      role: me.platform_role,
       status: "active",
       firm_id: null,
       firm_slug: null,
@@ -69,8 +70,6 @@ export async function loadMemberships(): Promise<Membership[]> {
       client_id: null,
       client_name: null,
     });
-  } catch (error) {
-    if (!(error instanceof ApiError) || error.problem.status !== 403) throw error;
   }
 
   return items;

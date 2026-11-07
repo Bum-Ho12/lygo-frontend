@@ -82,3 +82,8 @@ export function formatBytes(bytes: number): string {
   }
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
+
+/** What a client sees for a document: either it's ready, or the firm has received it. Nothing about processing. */
+export function clientDocumentStatus(status: string): string {
+  return status === "processed" ? "Ready" : "Received";
+}

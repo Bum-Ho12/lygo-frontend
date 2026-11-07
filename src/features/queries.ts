@@ -3,19 +3,7 @@
 import { useInfiniteQuery, useQueries, useQuery } from "@tanstack/react-query";
 import { api, apiList } from "@/lib/api/browser";
 import { apiPaths, withCursor } from "@/lib/api/paths";
-import type {
-  Client,
-  DocumentDetail,
-  DocumentRow,
-  ExtractedField,
-  Firm,
-  Flag,
-  Matter,
-  Member,
-  Membership,
-  StorageDestination,
-  User,
-} from "@/lib/api/types";
+import type { Client, DocumentDetail, DocumentRow, DocumentSectionText, ExtractedField, Firm, Flag, Matter, Member, Membership, StorageDestination, User } from "@/lib/api/types";
 import { isDocumentInProgress } from "@/lib/api/types";
 import { loadMemberships } from "@/lib/auth/memberships";
 
@@ -77,6 +65,15 @@ export function useFields(firmId: string, documentId: string | null) {
     queryKey: ["firm", firmId, "documents", documentId, "fields"],
     enabled: Boolean(documentId),
     queryFn: () => api<ExtractedField[]>(apiPaths.documentFields(firmId, documentId as string)),
+  });
+}
+
+export function useSections(firmId: string, documentId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["firm", firmId, "documents", documentId, "sections"],
+    enabled,
+    queryFn: () => api<DocumentSectionText[]>(apiPaths.documentSections(firmId, documentId)),
+    staleTime: 60_000,
   });
 }
 

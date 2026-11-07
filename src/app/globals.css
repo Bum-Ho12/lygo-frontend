@@ -63,3 +63,27 @@ h3,
   clip: auto;
   white-space: normal;
 }
+
+/* Annotated document: briefly draw the eye to the passage someone asked to see. */
+@keyframes lygo-flash {
+  0% { box-shadow: 0 0 0 0 var(--ink); }
+  40% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ink) 35%, transparent); }
+  100% { box-shadow: 0 0 0 2px var(--ink); }
+}
+.lygo-flash {
+  animation: lygo-flash 0.9s ease-out;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+@keyframes lygo-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+.lygo-pulse-dot {
+  animation: lygo-pulse-dot 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lygo-flash,
+  .lygo-pulse-dot {
+    animation: none;
+  }
+}

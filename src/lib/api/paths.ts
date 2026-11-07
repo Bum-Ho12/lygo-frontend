@@ -26,6 +26,11 @@ export const apiPaths = {
   member: (firmId: string, userId: string) => `/firms/${firmId}/members/${userId}`,
   invitations: (firmId: string) => `/firms/${firmId}/invitations`,
   invitationResend: (firmId: string, invitationId: string) => `/firms/${firmId}/invitations/${invitationId}/resend`,
+  invitation: (firmId: string, invitationId: string) => `/firms/${firmId}/invitations/${invitationId}`,
+  clientInvitation: (firmId: string, clientId: string, invitationId: string) => `/firms/${firmId}/clients/${clientId}/invitations/${invitationId}`,
+  clientInvitationResend: (firmId: string, clientId: string, invitationId: string) =>
+    `/firms/${firmId}/clients/${clientId}/invitations/${invitationId}/resend`,
+  documentSections: (firmId: string, documentId: string) => `/firms/${firmId}/documents/${documentId}/sections`,
   notifications: (firmId: string) => `/firms/${firmId}/notifications`,
   storageDestinations: (firmId: string) => `/firms/${firmId}/storage-destinations`,
   storageTest: (firmId: string, destinationId: string) => `/firms/${firmId}/storage-destinations/${destinationId}/test`,

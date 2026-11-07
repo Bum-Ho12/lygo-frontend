@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <section className="hidden flex-col justify-between bg-ink px-10 py-12 text-paper lg:flex">
         <p className="font-display text-3xl">Lygo</p>
         <div>
-          <h1 className="font-display text-5xl leading-tight">The matter file, kept in order.</h1>
+          <p className="font-display text-5xl leading-tight">The matter file, kept in order.</p>
           <p className="mt-4 max-w-md text-paper/75">
             Citations stay on the answer. Flags stay explainable. Client papers stay in the firm’s store.
           </p>

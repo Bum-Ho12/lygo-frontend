@@ -5,18 +5,20 @@ import { useId, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/browser";
 import { apiPaths } from "@/lib/api/paths";
-import type { Branding, Client, FirmNotification, Member, StorageDestination, Task } from "@/lib/api/types";
+import type { Branding, Client, FirmNotification, InviteResult, Member, PendingInvite, StorageDestination, Task } from "@/lib/api/types";
 import { collect, useDestinations, useFirmMatters, useList, useMembers, useResource } from "@/features/queries";
 import { meetsAa } from "@/lib/color";
 import { formatWhen, labelize, workStatusLabel } from "@/lib/format";
 import { usePermission, useTenant } from "@/lib/tenancy/context";
 import { Button, Card, Field, PageHeader, Select, TextArea, TextInput } from "@/components/ui";
 import { DataTable } from "@/components/record-view";
-import { EmptyState, LoadMore, QueryState, errorText } from "@/components/states";
+import { EmptyState, LoadMore, ProblemView, QueryState, errorText } from "@/components/states";
+import { ConfirmButton } from "@/components/confirm";
+import { InvitationList } from "@/components/invitations";
+import { NoticeView, PortalAccess, inviteNotice, type Notice } from "@/components/portal-access";
 
 const FIRM_ROLE_OPTIONS = ["firm_owner", "firm_admin", "advocate", "paralegal", "viewer"];
 
-type PendingInvite = { id: string; email: string; role: string; expires_at: string; expired: boolean };
 
 function useFirmId() {
   const { membership, firm } = useTenant();
@@ -95,29 +97,26 @@ export function OverviewScreen() {
 
 export function MembersScreen() {
   const { firmId } = useFirmId();
+  const { user } = useTenant();
   const queryClient = useQueryClient();
   const members = useMembers(firmId);
   const invitations = useList<PendingInvite>(["firm", firmId, "invitations"], apiPaths.invitations(firmId));
+  const clients = useList<Client>(["firm", firmId, "clients"], apiPaths.clients(firmId));
+  const clientNames = new Map(collect(clients).map((client) => [client.id, client.name]));
   const rows = collect(members).map((member) => ({ ...member, id: member.user_id }));
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("advocate");
-  const [message, setMessage] = useState<string | null>(null);
-  const [handoff, setHandoff] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const refreshInvites = () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "invitations"] });
+  const fail = (error: unknown) => setNotice({ tone: "error", text: errorText(error) });
   const invite = useMutation({
-    mutationFn: () => api<{ email_sent?: boolean; invite_link?: string | null }>(apiPaths.invitations(firmId), { method: "POST", body: { email, role } }),
-    onSuccess: (result) => {
-      setHandoff(result.email_sent === false ? result.invite_link ?? null : null);
-      setMessage(
-        result.email_sent === false
-          ? result.invite_link
-            ? `The email could not be sent. Share the link below with ${email}.`
-            : `Saved the invitation for ${email}, but the email could not be sent. Resend it below.`
-          : `Invitation sent to ${email}.`,
-      );
+    mutationFn: (to: string) => api<InviteResult>(apiPaths.invitations(firmId), { method: "POST", body: { email: to, role } }),
+    onSuccess: (result, to) => {
+      setNotice(inviteNotice(result, to));
       setEmail("");
-      void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "invitations"] });
+      void refreshInvites();
     },
-    onError: (error) => setMessage(errorText(error)),
+    onError: fail,
   });
   const update = useMutation({
     mutationFn: (body: { userId: string; role?: string; status?: string; remove?: boolean }) =>
@@ -125,39 +124,42 @@ export function MembersScreen() {
         ? api(apiPaths.member(firmId, body.userId), { method: "DELETE" })
         : api(apiPaths.member(firmId, body.userId), { method: "PATCH", body: { role: body.role, status: body.status } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "members"] }),
-    onError: (error) => setMessage(errorText(error)),
+    onError: (error) => {
+      fail(error);
+      void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "members"] }); // put the role picker back
+    },
   });
   const resend = useMutation({
-    mutationFn: (invitationId: string) =>
-      api<{ email_sent?: boolean; invite_link?: string | null }>(apiPaths.invitationResend(firmId, invitationId), { method: "POST", body: {} }),
-    onSuccess: (result) => {
-      setHandoff(result.email_sent === false ? result.invite_link ?? null : null);
-      setMessage(
-        result.email_sent === false
-          ? result.invite_link
-            ? "The email could not be sent. Share the link below."
-            : "Still couldn't send that email."
-          : "Invitation sent again.",
-      );
+    mutationFn: (invitation: PendingInvite) => api<InviteResult>(apiPaths.invitationResend(firmId, invitation.id), { method: "POST", body: {} }),
+    onSuccess: (result, invitation) => {
+      setNotice(inviteNotice(result, invitation.email, true));
+      void refreshInvites();
     },
-    onError: (error) => setMessage(errorText(error)),
+    onError: fail,
+  });
+  const revoke = useMutation({
+    mutationFn: (invitation: PendingInvite) => api(apiPaths.invitation(firmId, invitation.id), { method: "DELETE" }),
+    onSuccess: async (_, invitation) => {
+      await refreshInvites(); // confirm only once the list no longer shows it
+      setNotice({ tone: "ok", text: `Invitation to ${invitation.email} withdrawn.` });
+    },
+    onError: fail,
   });
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Members" lede="Invite colleagues and set what they can do. The owner role can only be granted by an owner." />
+      <PageHeader title="Members" lede="Invite colleagues and set what they can do. Only an owner can make someone an owner." />
       <Card>
         <form
           className="grid gap-3 sm:grid-cols-[1fr_12rem_auto]"
           onSubmit={(event) => {
             event.preventDefault();
-            setMessage(null);
-            setHandoff(null);
-            invite.mutate();
+            setNotice(null);
+            invite.mutate(email.trim());
           }}
         >
           <Field label="Email">
-            <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="off" required />
           </Field>
           <Field label="Role">
             <Select value={role} onChange={(event) => setRole(event.target.value)}>
@@ -170,32 +172,27 @@ export function MembersScreen() {
           </Field>
           <div className="self-end">
             <Button type="submit" disabled={invite.isPending}>
-              Send invite
+              {invite.isPending ? "Sending…" : "Send invite"}
             </Button>
           </div>
         </form>
-        {message ? <p className="mt-3 text-sm">{message}</p> : null}
-        {handoff ? (
-          <p className="mt-2 break-all text-sm">
-            <a href={handoff} className="underline">
-              {handoff}
-            </a>
-          </p>
-        ) : null}
+        <div className="mt-3">
+          <NoticeView notice={notice} />
+        </div>
       </Card>
       <QueryState isLoading={members.isLoading} error={members.error} empty={{ when: rows.length === 0, title: "No members yet" }}>
         <DataTable
           rows={rows}
           columns={[
-            { header: "Person", cell: (row) => row.name || "—" },
+            { header: "Person", cell: (row) => (row.user_id === user.id ? `${row.name || "—"} (you)` : row.name || "—") },
             { header: "Email", cell: (row) => row.email },
-            { header: "Role", cell: (row) => labelize(row.role) },
             { header: "Status", cell: (row) => workStatusLabel(row.status) },
             {
-              header: "Change",
+              header: "Role and access",
               cell: (row) => (
                 <MemberActions
                   member={row}
+                  isYou={row.user_id === user.id}
                   busy={update.isPending}
                   onRole={(next) => update.mutate({ userId: row.user_id, role: next })}
                   onStatus={(next) => update.mutate({ userId: row.user_id, status: next })}
@@ -208,22 +205,19 @@ export function MembersScreen() {
         <LoadMore hasNextPage={Boolean(members.hasNextPage)} isFetchingNextPage={members.isFetchingNextPage} onClick={() => members.fetchNextPage()} />
       </QueryState>
       <section className="space-y-3">
-        <h2 className="font-display text-2xl">Invitations not yet accepted</h2>
-        {invitations.isLoading ? <p className="text-sm text-ink-soft">Loading invitations…</p> : null}
-        {collect(invitations).length === 0 && !invitations.isLoading ? <p className="text-sm text-ink-soft">No open invitations.</p> : null}
-        <ul className="space-y-2">
-          {collect(invitations).map((invitation) => (
-            <li key={invitation.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lygo border border-line bg-paper-raised px-3 py-2 text-sm">
-              <span>
-                {invitation.email} · {labelize(invitation.role)}
-                {invitation.expired ? " · expired" : ` · until ${formatWhen(invitation.expires_at)}`}
-              </span>
-              <Button type="button" variant="quiet" disabled={resend.isPending} onClick={() => resend.mutate(invitation.id)}>
-                Resend
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div>
+          <h2 className="font-display text-2xl">Invitations waiting</h2>
+          <p className="text-sm text-ink-soft">Includes client portal invitations. Resending sends a fresh link; the old one stops working.</p>
+        </div>
+        {invitations.error ? <ProblemView error={invitations.error} /> : null}
+        <InvitationList
+          items={collect(invitations)}
+          loading={invitations.isLoading}
+          busy={resend.isPending || revoke.isPending}
+          onResend={(invitation) => resend.mutate(invitation)}
+          onRevoke={(invitation) => revoke.mutate(invitation)}
+          clientName={(id) => clientNames.get(id)}
+        />
       </section>
     </div>
   );
@@ -231,20 +225,24 @@ export function MembersScreen() {
 
 function MemberActions({
   member,
+  isYou,
   busy,
   onRole,
   onStatus,
   onRemove,
 }: {
   member: Member;
+  isYou: boolean;
   busy: boolean;
   onRole: (role: string) => void;
   onStatus: (status: string) => void;
   onRemove: () => void;
 }) {
+  const who = member.name || member.email;
+  if (isYou) return <span className="text-sm text-ink-soft">{labelize(member.role)} · ask another owner to change your access</span>;
   return (
-    <div className="flex flex-wrap gap-2">
-      <Select aria-label={`Role for ${member.email}`} defaultValue={member.role} disabled={busy} onChange={(event) => onRole(event.target.value)}>
+    <div className="flex flex-wrap items-center gap-2">
+      <Select aria-label={`Role for ${who}`} value={member.role} disabled={busy} onChange={(event) => onRole(event.target.value)} className="w-auto">
         {FIRM_ROLE_OPTIONS.map((option) => (
           <option key={option} value={option}>
             {labelize(option)}
@@ -254,9 +252,7 @@ function MemberActions({
       <Button type="button" variant="quiet" disabled={busy} onClick={() => onStatus(member.status === "suspended" ? "active" : "suspended")}>
         {member.status === "suspended" ? "Restore" : "Suspend"}
       </Button>
-      <Button type="button" variant="ghost" disabled={busy} onClick={onRemove}>
-        Remove
-      </Button>
+      <ConfirmButton label="Remove" question={`Remove ${who} from the firm?`} onConfirm={onRemove} disabled={busy} />
     </div>
   );
 }
@@ -269,44 +265,24 @@ export function ClientsScreen() {
   const [name, setName] = useState("");
   const [type, setType] = useState<"individual" | "business">("individual");
   const [sensitivity, setSensitivity] = useState<"normal" | "sensitive">("normal");
-  const [inviteFor, setInviteFor] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [handoff, setHandoff] = useState<string | null>(null);
+  const [accessFor, setAccessFor] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const create = useMutation({
-    mutationFn: () => api(apiPaths.clients(firmId), { method: "POST", body: { name, type, sensitivity } }),
-    onSuccess: () => {
+    mutationFn: () => api<Client>(apiPaths.clients(firmId), { method: "POST", body: { name: name.trim(), type, sensitivity } }),
+    onSuccess: (client) => {
       setName("");
-      setHandoff(null);
-      setMessage("Client added.");
+      setNotice({ tone: "ok", text: `${client.name} added.` });
       void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] });
     },
-    onError: (error) => setMessage(errorText(error)),
-  });
-  const invite = useMutation({
-    mutationFn: () =>
-      api<{ email_sent?: boolean; invite_link?: string | null }>(apiPaths.clientInvitations(firmId, inviteFor ?? ""), {
-        method: "POST",
-        body: { email, role: "client_user" },
-      }),
-    onSuccess: (result) => {
-      setHandoff(result.email_sent === false ? result.invite_link ?? null : null);
-      setMessage(
-        result.email_sent === false
-          ? result.invite_link
-            ? `The email could not be sent. Share the link below with ${email}.`
-            : `Saved the portal invitation for ${email}, but the email could not be sent.`
-          : `Portal invite sent to ${email}.`,
-      );
-      setEmail("");
-      setInviteFor(null);
-    },
-    onError: (error) => setMessage(errorText(error)),
+    onError: (error) => setNotice({ tone: "error", text: errorText(error) }),
   });
   const archive = useMutation({
-    mutationFn: (clientId: string) => api(apiPaths.client(firmId, clientId), { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] }),
-    onError: (error) => setMessage(errorText(error)),
+    mutationFn: (client: Client) => api(apiPaths.client(firmId, client.id), { method: "DELETE" }),
+    onSuccess: (_, client) => {
+      setNotice({ tone: "ok", text: `${client.name} archived.` });
+      void queryClient.invalidateQueries({ queryKey: ["firm", firmId, "clients"] });
+    },
+    onError: (error) => setNotice({ tone: "error", text: errorText(error) }),
   });
 
   return (
@@ -317,6 +293,7 @@ export function ClientsScreen() {
           className="grid gap-3 md:grid-cols-4"
           onSubmit={(event) => {
             event.preventDefault();
+            setNotice(null);
             create.mutate();
           }}
         >
@@ -337,54 +314,48 @@ export function ClientsScreen() {
           </Field>
           <div className="self-end">
             <Button type="submit" disabled={create.isPending}>
-              Add client
+              {create.isPending ? "Adding…" : "Add client"}
             </Button>
           </div>
         </form>
+        <div className="mt-3">
+          <NoticeView notice={notice} />
+        </div>
       </Card>
-      {message ? <p className="text-sm">{message}</p> : null}
-      {handoff ? (
-        <p className="break-all text-sm">
-          <a href={handoff} className="underline">
-            {handoff}
-          </a>
-        </p>
-      ) : null}
       <QueryState isLoading={clients.isLoading} error={clients.error} empty={{ when: rows.length === 0, title: "No clients yet", body: "Add the first client to open matters and receive documents." }}>
         <ul className="space-y-3">
           {rows.map((client) => (
             <li key={client.id} className="rounded-lygo border border-line bg-paper-raised p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <Link href={`/f/${slug}/workspace/clients/${client.id}`} className="font-display text-xl">
+                  <Link href={`/f/${slug}/workspace/clients/${client.id}`} className="font-display text-xl hover:underline">
                     {client.name}
                   </Link>
                   <p className="text-sm text-ink-soft">
                     {workStatusLabel(client.type)} · {workStatusLabel(client.sensitivity)}
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Button type="button" variant="quiet" onClick={() => setInviteFor(client.id)}>
-                    Invite to portal
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    aria-expanded={accessFor === client.id}
+                    onClick={() => setAccessFor(accessFor === client.id ? null : client.id)}
+                  >
+                    {accessFor === client.id ? "Close portal access" : "Portal access"}
                   </Button>
-                  <Button type="button" variant="ghost" onClick={() => archive.mutate(client.id)}>
-                    Archive
-                  </Button>
+                  <ConfirmButton
+                    label="Archive"
+                    question={`Archive ${client.name}? Their matters and documents are kept.`}
+                    onConfirm={() => archive.mutate(client)}
+                    disabled={archive.isPending}
+                  />
                 </div>
               </div>
-              {inviteFor === client.id ? (
-                <form
-                  className="mt-3 flex flex-wrap gap-2"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    invite.mutate();
-                  }}
-                >
-                  <TextInput type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Client email" required aria-label="Portal email" />
-                  <Button type="submit" disabled={invite.isPending}>
-                    Send
-                  </Button>
-                </form>
+              {accessFor === client.id ? (
+                <div className="mt-4 border-t border-line pt-4">
+                  <PortalAccess firmId={firmId} clientId={client.id} clientName={client.name} />
+                </div>
               ) : null}
             </li>
           ))}
@@ -655,9 +626,9 @@ function DestinationCard({
               Use this bucket
             </Button>
           )}
-          <Button type="button" variant="ghost" onClick={onRemove}>
-            Remove
-          </Button>
+          {destination.is_primary ? null : (
+            <ConfirmButton label="Remove" question={`Remove ${destination.name}? Lygo will forget its keys.`} onConfirm={onRemove} />
+          )}
         </div>
       </div>
     </li>
@@ -739,18 +710,21 @@ export function BrandingScreen() {
   );
 }
 
-function Unavailable({ title, body }: { title: string; body: string }) {
+function Unavailable({ heading, title, body }: { heading: string; title: string; body: string }) {
   const { slug } = useFirmId();
   return (
-    <EmptyState
-      title={title}
-      body={body}
-      action={
-        <Link href={`/f/${slug}/control-center`} className="underline">
-          Back to the overview
-        </Link>
-      }
-    />
+    <div className="space-y-6">
+      <PageHeader title={heading} />
+      <EmptyState
+        title={title}
+        body={body}
+        action={
+          <Link href={`/f/${slug}/control-center`} className="underline">
+            Back to the overview
+          </Link>
+        }
+      />
+    </div>
   );
 }
 
@@ -818,12 +792,14 @@ export function AiScreen() {
 }
 
 export function RulesScreen() {
-  return <Unavailable title="Rules run while a document is read" body="The result of those checks appears on the document, under Checks." />;
+  return <Unavailable heading="Rule packs" title="Rules run while a document is read" body="The result of those checks appears on the document, under Checks." />;
 }
 
 export function AuditScreen() {
   const { slug } = useFirmId();
   return (
+    <div className="space-y-6">
+    <PageHeader title="Activity" />
     <EmptyState
       title="Activity is recorded with each change"
       body="A full activity list is not on this screen. Message delivery is listed under Messages."
@@ -833,13 +809,14 @@ export function AuditScreen() {
         </Link>
       }
     />
+    </div>
   );
 }
 
 export function BillingScreen() {
-  return <Unavailable title="Billing is not on this screen" body="The firm's plan is shown on the overview. Invoices are handled outside Lygo for now." />;
+  return <Unavailable heading="Billing" title="Billing is not on this screen" body="The firm's plan is shown on the overview. Invoices are handled outside Lygo for now." />;
 }
 
 export function DevelopersScreen() {
-  return <Unavailable title="Keys and webhooks are not on this screen" body="The firm works through these pages. A key for outside software is not available yet." />;
+  return <Unavailable heading="Developers" title="Keys and webhooks are not on this screen" body="The firm works through these pages. A key for outside software is not available yet." />;
 }
