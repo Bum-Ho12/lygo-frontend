@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lygo · Pitch</title>
+<meta name="description" content="Lygo: a secure workspace for Kenyan law firms, with document checks you can see and an assistant that cites its sources.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23172033%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-family=%27Georgia,serif%27 font-size=%2720%27 text-anchor=%27middle%27 fill=%27%23f3efe4%27%3EL%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3efe4; --paper-raised: #fffdf8; --ink: #172033; --ink-soft: #4c5870; --line: #ddd4c3;
+    --brand: #0e3b34; --brand-fg: #f6f1e6; --accent: #8a4518;
+    --info: #1d4ed8; --caution: #a16207; --warning: #c2410c; --critical: #b42318; --ok: #0f766e;
+    --display: "Newsreader", Georgia, serif; --sans: "Source Sans 3", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0b1220; color: var(--ink); font-family: var(--sans); }
+  body { overflow: hidden; }
+
+  /* The stage keeps a 16:9 slide and scales it to fit any window. */
+  .stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  .deck { position: relative; width: 1280px; height: 720px; transform-origin: center; }
+  .slide {
+    position: absolute; inset: 0; padding: 64px 80px; background: var(--paper); border-radius: 18px;
+    display: flex; flex-direction: column; opacity: 0; visibility: hidden; transform: translateY(8px);
+    transition: opacity .35s ease, transform .35s ease, visibility .35s;
+    box-shadow: 0 30px 80px rgb(0 0 0 / .35); overflow: hidden;
+  }
+  .slide.active { opacity: 1; visibility: visible; transform: none; }
+  .slide.dark { background: var(--ink); color: var(--paper); }
+  .slide.brand { background: var(--brand); color: var(--brand-fg); }
+
+  h1, h2, h3 { font-family: var(--display); font-weight: 560; letter-spacing: -0.02em; margin: 0; }
+  h1 { font-size: 76px; line-height: 1.02; }
+  h2 { font-size: 46px; line-height: 1.08; }
+  h3 { font-size: 24px; line-height: 1.2; }
+  p { margin: 0; }
+  .kicker { font-size: 14px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 18px; }
+  .dark .kicker, .brand .kicker { color: #e7a06a; }
+  .lede { font-size: 24px; line-height: 1.45; color: var(--ink-soft); max-width: 860px; margin-top: 20px; }
+  .dark .lede, .brand .lede { color: #d9d0c0; }
+  .grid { display: grid; gap: 22px; margin-top: 36px; }
+  .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); }
+  .card { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; }
+  .card p { color: var(--ink-soft); font-size: 17px; line-height: 1.45; margin-top: 8px; }
+  .dark .card { background: #24312b; border-color: #3b4a43; } .dark .card p { color: #d9d0c0; }
+  .num { font-family: var(--display); font-size: 40px; color: var(--accent); line-height: 1; }
+  .foot { margin-top: auto; display: flex; justify-content: space-between; font-size: 14px; color: var(--ink-soft); }
+  .dark .foot, .brand .foot { color: #b9b3a6; }
+  .logo { font-family: var(--display); font-size: 30px; font-weight: 600; }
+  ul.clean { list-style: none; padding: 0; margin: 0; }
+  .tick li { position: relative; padding-left: 30px; font-size: 20px; line-height: 1.45; margin: 10px 0; }
+  .tick li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 700; }
+  .dark .tick li::before { color: #5fd3c3; }
+
+  /* Product visuals, drawn in HTML with the app's own styles. */
+  .mock { background: var(--paper-raised); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; color: var(--ink); box-shadow: 0 16px 40px rgb(23 32 51 / 10%); }
+  .mock .t { font-size: 15.5px; line-height: 1.9; }
+  .mock .h { font-weight: 700; font-size: 14px; margin-top: 8px; }
+  mark { color: inherit; border-radius: 3px; padding: 0 2px; text-decoration: underline 2px; text-underline-offset: 4px; }
+  mark.crit { background: color-mix(in srgb, var(--critical) 15%, transparent); text-decoration-color: var(--critical); }
+  mark.warn { background: color-mix(in srgb, var(--warning) 20%, transparent); text-decoration-color: var(--warning); }
+  .detail { text-decoration: underline dotted 2px var(--info); text-underline-offset: 4px; }
+  .chip { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; border-radius: 99px; font-size: 10.5px; font-weight: 700; color: #fff; vertical-align: super; margin-right: 2px; padding: 0 4px; }
+  .chip.crit { background: var(--critical); } .chip.warn { background: var(--warning); }
+  .badge { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border-radius: 99px; padding: 2px 9px; }
+  .badge.crit { color: var(--critical); background: color-mix(in srgb, var(--critical) 15%, transparent); }
+  .badge.warn { color: var(--warning); background: color-mix(in srgb, var(--warning) 15%, transparent); }
+  .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 15%, transparent); }
+  .steps { display: flex; justify-content: space-between; position: relative; margin: 6px 6px 0; }
+  .steps::before { content: ""; position: absolute; left: 22px; right: 22px; top: 14px; height: 2px; background: var(--ok); }
+  .step { position: relative; z-index: 1; text-align: center; font-size: 13px; font-weight: 600; width: 88px; }
+  .step i { display: flex; margin: 0 auto 6px; width: 30px; height: 30px; border-radius: 50%; background: var(--ok); color: #fff; font-style: normal; align-items: center; justify-content: center; font-size: 14px; border: 2px solid var(--ok); }
+  .step.live i { background: var(--paper-raised); color: var(--ink); border-color: var(--ink); animation: pulse 1.2s ease-in-out infinite; }
+  .step.wait i { background: var(--paper); color: var(--ink-soft); border-color: var(--line); }
+  .steps.partial::before { background: linear-gradient(90deg, var(--ok) 0 52%, var(--line) 52%); }
+  @keyframes pulse { 50% { transform: scale(.85); opacity: .5; } }
+  .row { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line); font-size: 15.5px; }
+  .row:first-child { border-top: 0; }
+  .row b { font-family: var(--display); font-size: 17px; }
+
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 40px; }
+  .flow .card { position: relative; }
+  .flow .card:not(:last-child)::after { content: "→"; position: absolute; right: -15px; top: 42%; color: var(--accent); font-size: 22px; font-weight: 700; }
+  .pill { display: inline-block; border: 1px solid var(--line); border-radius: 99px; padding: 8px 16px; font-size: 18px; margin: 6px 6px 0 0; background: var(--paper-raised); }
+  .cta { display: inline-block; margin-top: 30px; background: var(--brand-fg); color: var(--brand); padding: 14px 22px; border-radius: 12px; font-weight: 700; font-size: 20px; text-decoration: none; }
+
+  /* Controls */
+  .bar { position: fixed; left: 0; bottom: 0; height: 4px; background: #e7a06a; transition: width .3s; z-index: 5; }
+  .ui { position: fixed; right: 18px; bottom: 14px; display: flex; gap: 8px; align-items: center; color: #cfd6e4; font-size: 14px; z-index: 5; }
+  .ui button { background: rgb(255 255 255 / .1); color: #fff; border: 1px solid rgb(255 255 255 / .2); border-radius: 10px; width: 40px; height: 36px; font-size: 18px; cursor: pointer; }
+  .ui button:hover { background: rgb(255 255 255 / .2); }
+  .ui button:focus-visible { outline: 2px solid #e7a06a; outline-offset: 2px; }
+  .hint { position: fixed; left: 18px; bottom: 16px; color: #8b95a8; font-size: 13px; z-index: 5; }
+  @media (max-width: 700px) { .hint { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .slide { transition: none; } .step.live i { animation: none; } }
+
+  /* Phones and narrow windows: a scrollable column of readable cards instead of a shrunken 16:9 stage. */
+  @media (max-width: 760px) {
+    body { overflow: auto; background: var(--paper); }
+    .stage { position: static; display: block; padding: 12px 0 40px; }
+    .deck { width: auto; height: auto; transform: none !important; }
+    .slide { position: relative; inset: auto; opacity: 1; visibility: visible; transform: none; height: auto; min-height: 0;
+             margin: 12px 16px; padding: 28px 22px; box-shadow: 0 8px 24px rgb(23 32 51 / .12); }
+    h1 { font-size: 42px; } h2 { font-size: 29px; } h3 { font-size: 20px; }
+    .lede { font-size: 18px; }
+    .grid, .g2, .g3, .g4, .flow { grid-template-columns: 1fr !important; gap: 14px; margin-top: 22px; }
+    .flow .card:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -19px; }
+    .slide > div[style*="margin-top: 120px"] { margin-top: 48px !important; }
+    .foot { margin-top: 26px; font-size: 13px; }
+    .tick li { font-size: 17px; }
+    .pill { font-size: 15px; padding: 6px 12px; }
+    .steps { flex-wrap: wrap; row-gap: 12px; } .steps::before { display: none; } .step { width: 33%; }
+    .mock .t { font-size: 15px; }
+    .cta { font-size: 18px; }
+    .ui, .bar, .hint { display: none; }
+  }
+
+  /* Print / Save as PDF: one slide per page. */
+  @media print {
+    @page { size: 1280px 720px; margin: 0; }
+    html, body { background: none; overflow: visible; height: auto; }
+    .stage { position: static; display: block; }
+    .deck { transform: none !important; width: auto; height: auto; }
+    .slide { position: relative; opacity: 1; visibility: visible; transform: none; width: 1280px; height: 720px; border-radius: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .ui, .bar, .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+<main class="deck" id="deck" aria-roledescription="slide deck" aria-label="Lygo pitch">
+
+  <!-- 1. Title -->
+  <section class="slide dark" aria-label="Title">
+    <div class="logo">Lygo</div>
+    <div style="margin-top: 120px">
+      <h1>The matter file,<br>kept in order.</h1>
+      <p class="lede">A secure workspace for Kenyan law firms. It reads every document, flags what needs a person, and answers from the exact passage it used.</p>
+    </div>
+    <div class="foot"><span>Nairobi · en-KE</span><span>lygo-frontend.rumptycloud.app</span></div>
+  </section>
+
+  <!-- 2. Problem -->
+  <section class="slide" aria-label="The problem">
+    <div class="kicker">The problem</div>
+    <h2>Law firms run on paper, inboxes and memory.</h2>
+    <div class="grid g2" style="margin-top: 40px">
+      <div class="card"><h3>Hours lost to finding and re-typing</h3><p>Documents arrive on paper, by email and on shared drives. Advocates search, read and re-type the same details, case after case.</p></div>
+      <div class="card"><h3>Risks spotted late, or missed</h3><p>A 14-day notice period, an exclusion, a cancellation clause. It's easy to catch it too late when it's buried on page nine.</p></div>
+      <div class="card"><h3>Clients call to ask what it means</h3><p>Clients don't understand their own policies, contracts and notices, so routine explanations and status updates eat up the firm's day.</p></div>
+      <div class="card"><h3>Data protection with ad-hoc tools</h3><p>Kenya's Data Protection Act 2019 expects controls that laptops, USB sticks and personal email can't give.</p></div>
+    </div>
+    <div class="foot"><span>Lygo</span><span>2</span></div>
+  </section>
+
+  <!-- 3. Solution -->
+  <section class="slide" aria-label="The solution">
+    <div class="kicker">The solution</div>
+    <h2>One workspace per firm. Every document read, checked and explained.</h2>
+    <div class="flow">
+      <div class="card"><div class="num">1</div><h3 style="margin-top: 10px">Bring it in</h3><p>Upload, drag in, or photograph paper. Scans are read with OCR. Files are virus-checked and de-duplicated.</p></div>
+      <div class="card"><div class="num">2</div><h3 style="margin-top: 10px">Lygo reads it</h3><p>It splits clauses, identifies the document type, and pulls out parties, amounts, dates and periods.</p></div>
+      <div class="card"><div class="num">3</div><h3 style="margin-top: 10px">Rules check it</h3><p>The firm's rule packs flag risky clauses and missing pieces, with a plain explanation of each.</p></div>
+      <div class="card"><div class="num">4</div><h3 style="margin-top: 10px">People decide</h3><p>Advocates confirm or dismiss findings and research with an assistant that cites its sources. Clients see what's been confirmed.</p></div>
+    </div>
+    <div class="foot"><span>Lygo</span><span>3</span></div>
+  </section>
+
+  <!-- 4. Product: annotated document -->
+  <section class="slide" aria-label="Product: findings on the page">
+    <div class="kicker">Product</div>
+    <h2>Findings shown on the page, not buried in a report.</h2>
+    <div class="grid" style="grid-template-columns: 1.35fr 1fr; margin-top: 30px; align-items: start">
+      <div class="mock">
+        <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--ink-soft); margin-bottom:6px"><span>Motor insurance policy · Annotated</span><span><span class="badge crit">Critical</span> <span class="badge warn">Warning</span> <span class="detail">Detail</span></span></div>
+        <div class="t">
+          <div class="h">Policy Schedule</div>
+          Insured: <span class="detail">Jane Wanjiru</span>. Sum insured <span class="detail">KES 2,000,000</span>. Premium <span class="detail">KES 40,000</span>.
+          <div class="h">Exclusions</div>
+          This policy does not cover any <mark class="warn"><span class="chip warn">2</span>pre-existing condition</mark> or racing.
+          <div class="h">Claims</div>
+          You must <mark class="crit"><span class="chip crit">1</span>notify us of any claim within 14 days</mark> of the event, in writing.
+          <div class="h">Cancellation</div>
+          We may cancel this policy by giving <span class="detail">30 days</span> written notice.
+        </div>
+      </div>
+      <div class="mock">
+        <h3>Findings</h3>
+        <div style="margin-top: 10px">
+          <div class="row"><b>1.</b><div>Short deadline to report a claim<br><span class="badge crit">Critical</span> <span class="badge ok">Shared with client</span></div></div>
+          <div class="row"><b>2.</b><div>Pre-existing conditions excluded<br><span class="badge warn">Warning</span></div></div>
+        </div>
+        <p style="margin-top: 14px; font-size: 15px; color: var(--ink-soft)">Click a finding and the page scrolls to its passage. Click a highlight and its finding is selected.</p>
+      </div>
+    </div>
+    <div class="foot"><span>Lygo</span><span>4</span></div>
+  </section>
+
+  <!-- 5. Product: how it read it + portal -->
+  <section class="slide" aria-label="Product: transparent processing and a client portal">
+    <div class="kicker">Product</div>
+    <h2>Firms see the work. Clients see the answer.</h2>
+    <div class="grid g2" style="margin-top: 30px; align-items: start">
+      <div>
+        <div class="mock">
+          <h3 style="font-size: 20px">How Lygo read it</h3>
+          <div class="steps partial" style="margin-top: 16px">
+            <div class="step"><i>✓</i>Read</div><div class="step"><i>✓</i>Structure</div><div class="step"><i>✓</i>Identify</div>
+            <div class="step live"><i>4</i>Details</div><div class="step wait"><i>5</i>Checks</div><div class="step wait"><i>6</i>Searchable</div>
+          </div>
+        </div>
+        <p style="font-size: 19px; line-height: 1.45; color: var(--ink-soft); margin-top: 18px"><b style="color: var(--ink)">For the firm:</b> every stage is visible live, and every finding can be confirmed, dismissed with a reason, or shared.</p>
+      </div>
+      <div>
+        <div class="mock">
+          <h3 style="font-size: 20px">Points your advocate highlighted</h3>
+          <div class="row" style="margin-top: 8px"><b>1.</b><div><b style="font-family: var(--sans); font-size: 15.5px">Short deadline to report a claim</b><br><span style="color: var(--ink-soft)">You must tell the insurer about a claim within 14 days. Missing this window can be used to reject the claim.</span></div></div>
+          <p style="font-size: 13px; color: var(--ink-soft); margin-top: 10px">This explains your document in general terms. It is not legal advice.</p>
+        </div>
+        <p style="font-size: 19px; line-height: 1.45; color: var(--ink-soft); margin-top: 18px"><b style="color: var(--ink)">For clients:</b> a plain-language portal with only finished documents and confirmed points, never the firm's drafts or internal notes.</p>
+      </div>
+    </div>
+    <div class="foot"><span>Lygo</span><span>5</span></div>
+  </section>
+
+  <!-- 6. Assistant -->
+  <section class="slide dark" aria-label="An assistant that cites its sources">
+    <div class="kicker">The assistant</div>
+    <h2>Answers that show their sources, or say they don't know.</h2>
+    <div class="grid g3">
+      <div class="card"><h3>Cited, every time</h3><p>Answers draw on the firm's documents, its knowledge base and Kenyan law. Each claim links to the passage it came from, and unverifiable citations are dropped.</p></div>
+      <div class="card"><h3>Built for legal work</h3><p>Research notes, case outlines, document summaries, fact-checking of citations, version comparison and a matter chronology.</p></div>
+      <div class="card"><h3>Safe with clients</h3><p>The client assistant explains in plain words, marks itself as "not legal advice", and is off until the firm turns it on.</p></div>
+    </div>
+    <div class="foot"><span>Lygo</span><span>6</span></div>
+  </section>
+
+  <!-- 7. Trust -->
+  <section class="slide" aria-label="Trust and compliance">
+    <div class="kicker">Trust</div>
+    <h2>Built for privileged data from day one.</h2>
+    <div class="grid g2" style="margin-top: 34px">
+      <ul class="clean tick">
+        <li><b>Firm isolation in the database</b>, enforced row by row rather than by app code alone</li>
+        <li><b>Clients see only what's finished and confirmed</b>, enforced by the API</li>
+        <li><b>Two-step sign-in</b> for firm and platform staff, with an audit trail of every change</li>
+      </ul>
+      <ul class="clean tick">
+        <li><b>The firm chooses where files live:</b> Lygo storage, or its own bucket, with residency recorded</li>
+        <li><b>Shaped around Kenya's Data Protection Act 2019</b>: data processing agreements, minimal data, PII kept out of logs</li>
+        <li><b>Every firm is reviewed</b>, with its LSK admission number checked, before its workspace opens</li>
+      </ul>
+    </div>
+    <div class="foot"><span>Lygo</span><span>7</span></div>
+  </section>
+
+  <!-- 8. Who it's for / status -->
+  <section class="slide" aria-label="Who it is for and where we are">
+    <div class="kicker">Who it's for</div>
+    <h2>Every practice area, one platform.</h2>
+    <div style="margin-top: 26px">
+      <span class="pill">Insurance</span><span class="pill">Conveyancing</span><span class="pill">Immigration</span><span class="pill">Employment</span><span class="pill">Family</span><span class="pill">Commercial</span><span class="pill">Litigation</span><span class="pill">Probate &amp; succession</span>
+    </div>
+    <div class="grid g4" style="margin-top: 44px">
+      <div class="card"><div class="num">Live</div><p>Working product: web app, client portal and control center</p></div>
+      <div class="card"><div class="num">Self-serve</div><p>Firms sign up, are reviewed, and invite their team</p></div>
+      <div class="card"><div class="num">400+</div><p>Automated tests, including tenant-isolation and client-privacy checks</p></div>
+      <div class="card"><div class="num">SMS · email</div><p>OTP sign-in, alerts and invitations on local providers</p></div>
+    </div>
+    <div class="foot"><span>Lygo</span><span>8</span></div>
+  </section>
+
+  <!-- 9. Next / ask -->
+  <section class="slide brand" aria-label="Next steps">
+    <div class="kicker">What's next</div>
+    <h2>We're looking for pilot firms.</h2>
+    <div class="grid g3" style="margin-top: 36px">
+      <div class="card" style="background: rgb(255 255 255 / .07); border-color: rgb(255 255 255 / .18)"><h3 style="color: var(--brand-fg)">Pilot</h3><p style="color: #d9d0c0">A small group of Nairobi firms across insurance, conveyancing and immigration.</p></div>
+      <div class="card" style="background: rgb(255 255 255 / .07); border-color: rgb(255 255 255 / .18)"><h3 style="color: var(--brand-fg)">Prove</h3><p style="color: #d9d0c0">Measure time saved per matter and risks caught early, and set pricing with pilot firms.</p></div>
+      <div class="card" style="background: rgb(255 255 255 / .07); border-color: rgb(255 255 255 / .18)"><h3 style="color: var(--brand-fg)">Harden</h3><p style="color: #d9d0c0">Sign vendor DPAs, set up a dedicated sending domain, and run a production security review.</p></div>
+    </div>
+    <a class="cta" href="/register-firm">Register your firm →</a>
+    <div class="foot"><span class="logo" style="font-size: 22px">Lygo</span><span>lygo-frontend.rumptycloud.app</span></div>
+  </section>
+
+</main>
+</div>
+
+<div class="bar" id="bar"></div>
+<div class="hint">← → or swipe · F full screen · P print / PDF</div>
+<nav class="ui" aria-label="Slide controls">
+  <button id="prev" aria-label="Previous slide">‹</button>
+  <span id="count" aria-live="polite">1 / 9</span>
+  <button id="next" aria-label="Next slide">›</button>
+</nav>
+
+<script>
+(() => {
+  const deck = document.getElementById("deck");
+  const slides = [...deck.querySelectorAll(".slide")];
+  const count = document.getElementById("count");
+  const bar = document.getElementById("bar");
+  let i = Math.min(Math.max(parseInt(location.hash.slice(1), 10) - 1 || 0, 0), slides.length - 1);
+
+  const narrow = window.matchMedia("(max-width: 760px)");
+  function fit() {
+    if (narrow.matches) { deck.style.transform = ""; return; }
+    const s = Math.min(window.innerWidth / 1320, window.innerHeight / 760);
+    deck.style.transform = `scale(${s})`;
+  }
+  function show(n) {
+    i = Math.min(Math.max(n, 0), slides.length - 1);
+    if (narrow.matches) {
+      // Scrolling layout: every slide is readable; a #n link just scrolls to it.
+      slides.forEach((el) => { el.inert = false; el.setAttribute("aria-hidden", "false"); });
+      if (location.hash) slides[i].scrollIntoView({ block: "start" });
+      return;
+    }
+    slides.forEach((el, k) => {
+      el.classList.toggle("active", k === i);
+      el.setAttribute("aria-hidden", k === i ? "false" : "true");
+      el.inert = k !== i;
+    });
+    count.textContent = `${i + 1} / ${slides.length}`;
+    bar.style.width = `${((i + 1) / slides.length) * 100}%`;
+    history.replaceState(null, "", `#${i + 1}`);
+  }
+  document.getElementById("prev").onclick = () => show(i - 1);
+  document.getElementById("next").onclick = () => show(i + 1);
+  addEventListener("keydown", (e) => {
+    if (narrow.matches) return;
+    if (["ArrowRight", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    else if (["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    else if (e.key === "Home") show(0);
+    else if (e.key === "End") show(slides.length - 1);
+    else if (e.key.toLowerCase() === "f") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+    else if (e.key.toLowerCase() === "p") window.print();
+  });
+  let x0 = null;
+  addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  addEventListener("touchend", (e) => {
+    if (x0 === null || narrow.matches) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 40) show(i + (dx < 0 ? 1 : -1));
+    x0 = null;
+  });
+  addEventListener("resize", () => { fit(); show(i); });
+  narrow.addEventListener?.("change", () => { fit(); show(i); });
+  addEventListener("hashchange", () => show(parseInt(location.hash.slice(1), 10) - 1 || 0));
+  fit(); show(i);
+})();
+</script>
+</body>
+</html>

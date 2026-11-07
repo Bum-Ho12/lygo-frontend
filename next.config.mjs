@@ -2,6 +2,9 @@
 const nextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  async rewrites() {
+    return [{ source: "/pitch", destination: "/pitch.html" }]; // public pitch deck (public/pitch.html)
+  },
   reactStrictMode: true,
   async headers() {
     return [
