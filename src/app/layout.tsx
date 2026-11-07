@@ -1,11 +1,22 @@
 import type { ReactNode } from "react";
+import { Newsreader, Source_Sans_3 } from "next/font/google";
+import { Providers } from "@/lib/query/provider";
+import "./globals.css";
 
-export const metadata = { title: "Lygo", description: "Legal data platform for law firms and their clients" };
+const display = Newsreader({ subsets: ["latin"], variable: "--font-display", display: "swap" });
+const sans = Source_Sans_3({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+
+export const metadata = {
+  title: { default: "Lygo", template: "%s · Lygo" },
+  description: "Legal data platform for law firms and their clients",
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={`${display.variable} ${sans.variable}`}>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
