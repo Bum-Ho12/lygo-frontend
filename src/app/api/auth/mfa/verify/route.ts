@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   }
   const shared = jar.get(COOKIE.shared)?.value === "1";
   const method = body.method === "sms" || body.method === "recovery" ? body.method : "totp";
-  const { status, data } = await postAuth("/auth/mfa/verify", { mfa_token: mfa, method, code: body.code });
+  const { status, data } = await postAuth("/v1/auth/mfa/verify", { mfa_token: mfa, method, code: body.code });
   const tokens = status < 400 ? tokenPair(data) : null;
   if (!tokens) return NextResponse.json(toProblem(status, data), { status: status || 401 });
   persistSession(jar, tokens, shared, randomBytes(32).toString("hex"));

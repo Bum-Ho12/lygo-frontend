@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       { status: 401 },
     );
   }
-  const { status, data } = await postWithAccess("/me/mfa/totp/confirm", access, { code: body.code ?? "" });
+  const { status, data } = await postWithAccess("/v1/me/mfa/totp/confirm", access, { code: body.code ?? "" });
   const tokens = status < 400 ? tokenPair(data) : null;
   if (!tokens) return NextResponse.json(toProblem(status, data), { status: status || 401 });
   const record = data && typeof data === "object" ? (data as { recovery_codes?: unknown }) : {};

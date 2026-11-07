@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { contrastRatio } from "@/lib/color";
+import { apiUrl } from "@/lib/api/backend";
 import { apiPaths, withCursor } from "@/lib/api/paths";
 import { problemMessage, toProblem } from "@/lib/api/problem";
 import { visibleFlags } from "@/lib/api/types";
@@ -34,6 +35,13 @@ describe("api paths", () => {
     expect(apiPaths.aiSettings("firm")).toBe("/firms/firm/ai-settings");
     expect(apiPaths.approveOutput("firm", "message")).toBe("/firms/firm/ai-outputs/message:approve");
     expect(apiPaths.facts("firm", "matter")).toBe("/firms/firm/matters/matter/facts");
+    const previous = process.env.LYGO_API_URL;
+    process.env.LYGO_API_URL = "http://localhost:8000";
+    expect(apiUrl("/v1/auth/login")).toBe("http://localhost:8000/v1/auth/login");
+    process.env.LYGO_API_URL = "http://localhost:8000/v1";
+    expect(apiUrl("/firms/firm/members")).toBe("http://localhost:8000/v1/firms/firm/members");
+    if (previous === undefined) delete process.env.LYGO_API_URL;
+    else process.env.LYGO_API_URL = previous;
     expect(apiPaths.corpusSection("doc", "s.12")).toBe("/corpus/documents/doc/sections/s.12");
     expect(apiPaths.corpusSection("doc", "s.12 (1)")).toBe("/corpus/documents/doc/sections/s.12%20(1)");
     expect(withCursor("/firms/firm/clients?matter_id=m", "abc", 10)).toBe("/firms/firm/clients?matter_id=m&limit=10&cursor=abc");

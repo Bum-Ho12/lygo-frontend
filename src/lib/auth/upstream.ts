@@ -1,8 +1,8 @@
-import { apiBase } from "@/lib/api/backend";
+import { apiUrl } from "@/lib/api/backend";
 
 export async function postWithAccess(path: string, access: string, body: unknown): Promise<{ status: number; data: unknown }> {
   try {
-    const res = await fetch(`${apiBase()}${path}`, {
+    const res = await fetch(apiUrl(path), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${access}`,
@@ -35,7 +35,7 @@ export async function postWithAccess(path: string, access: string, body: unknown
 
 export async function postAuth(path: string, body: unknown): Promise<{ status: number; data: unknown }> {
   try {
-    const res = await fetch(`${apiBase()}${path}`, {
+    const res = await fetch(apiUrl(path), {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/problem+json, application/json" },
       body: JSON.stringify(body),

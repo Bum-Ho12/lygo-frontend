@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const value = body[field];
     if (typeof value === "string" && value.trim()) payload[field] = value.trim();
   }
-  const { status, data } = await postAuth("/auth/register", payload);
+  const { status, data } = await postAuth("/v1/auth/register", payload);
   const tokens = status < 400 ? tokenPair(data) : null;
   if (tokens) return establishSession(tokens, false);
   if (status >= 400) return NextResponse.json(toProblem(status, data), { status });

@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       { status: 401 },
     );
   }
-  const { status, data } = await postWithAccess("/me/password", access, {
+  const { status, data } = await postWithAccess("/v1/me/password", access, {
     current_password: body.current_password ?? "",
     new_password: body.new_password ?? "",
   });

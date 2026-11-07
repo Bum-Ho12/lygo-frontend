@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { apiBase } from "@/lib/api/backend";
+import { apiUrl } from "@/lib/api/backend";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const res = await fetch(`${apiBase()}/health`, { cache: "no-store" });
+    const res = await fetch(apiUrl("/v1/health"), { cache: "no-store" });
     const text = await res.text();
     return new NextResponse(text || JSON.stringify({ status: "unknown" }), {
       status: res.status,
